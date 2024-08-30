@@ -313,18 +313,18 @@ class integrator():
 
     ###############################################################
     
-    def update_vv_Syz( self, map_rpmd, d2_mapR, small_dt ):
+    def update_vv_mapSyz( self, map_rpmd, d2_mapR, small_dt ):
 
         #Update spin-z by 1/4 a time-step
-        map_rpmd.Sz += - 0.25 * 2 * np.sum(map_rpmd.NAC * map_rpmd.nucP) / map_rpmd.mass * map_rpmd.Sx * small_dt
-        map_rpmd.Sy += 0.25 * 2 * map_rpmd.potential.Vz * map_rpmd.Sx * small_dt
+        map_rpmd.mapSz += - 0.25 * 2 * np.sum(map_rpmd.NAC * map_rpmd.nucP) / map_rpmd.mass * map_rpmd.Sx * small_dt
+        map_rpmd.mapSy += 0.25 * 2 * map_rpmd.potential.Vz * map_rpmd.Sx * small_dt
 
     ###############################################################
 
-    def update_vv_Sx( self, map_rpmd, small_dt):
+    def update_vv_mapSx( self, map_rpmd, small_dt):
 
         #Update spin-x by 1/2 a time-step
-        map_rpmd.Sx += 0.5*small_dt * (2 * np.sum(map_rpmd.NAC * map_rpmd.nucP) / map_rpmd.mass * map_rpmd.Sz - 2 * map_rpmd.potential.Vz * map_rpmd.Sy)
+        map_rpmd.mapSx += 0.5*small_dt * (2 * np.sum(map_rpmd.NAC * map_rpmd.nucP) / map_rpmd.mass * map_rpmd.Sz - 2 * map_rpmd.potential.Vz * map_rpmd.Sy)
     
     ###############################################################
     def updata_vv_mapS(self, map_rpmd):
@@ -335,11 +335,11 @@ class integrator():
         for _ in range( self.small_dt_ratio ):
 
             #Calculate first time derivative of mapping position and momentum
-            d_mapR = map_rpmd.get_timederiv_mapR()
-            d_mapP = map_rpmd.get_timederiv_mapP()
+            d_mapR = map_rpmd.get_timederiv_mapSx()
+            d_mapSy, d_mapSz = map_rpmd.get_timederiv_mapSyz()
 
             #Calculate second time derivative of mapping position
-            d2_mapR = map_rpmd.get_2nd_timederiv_mapR( d_mapP )
+            d2_mapR = map_rpmd.get_2nd_timederiv_mapSx( d_mapSy, d_mapSz )
 
             #Update mapping position by 1/2 a time-step
             self.update_vv_mapR( map_rpmd, d_mapR, d2_mapR, small_dt )
