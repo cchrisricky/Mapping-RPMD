@@ -4,6 +4,7 @@ import numpy as np
 import utils
 from abc import ABC, abstractmethod
 import nuc_only_potential
+import scipy.linalg as la
 
 #############################################
 
@@ -11,7 +12,8 @@ def set_potential( potype, potparams, nstates, nnuc, nbds ):
 
     #Separate routine which returns the appropriate potential class indicated by potype
 
-    potype_list = ['harm_const_cpl', 'harm_lin_cpl', 'harm_lin_cpl_symmetrized', 'harm_lin_cpl_sym_2', 'nstate_morse', 'nuc_only_harm', 'pengfei_polariton', 'isolated_elec']
+    potype_list = ['harm_const_cpl', 'harm_lin_cpl', 'harm_lin_cpl_symmetrized', 'harm_lin_cpl_sym_2', 'nstate_morse', 
+                   'nuc_only_harm', 'pengfei_polariton', 'isolated_elec']
 
     if( potype not in potype_list ):
         print("ERROR: potype not one of valid types:")
@@ -36,17 +38,23 @@ class potential(ABC):
     #####################################################################
 
     @abstractmethod
-    def __init__( self, potname, potparams, nstates, nnuc, nbds ):
+    def __init__( self, potname, potparams, nstates, nnuc, nbds, boPes_bool=False ):
 
         self.potname   = potname #string corresponding to the name of the potential
         self.potparams = potparams #array defining the necessary constants for the potential
         self.nstates   = nstates #number of electronic states
         self.nnuc      = nnuc #number of nuclei
         self.nbds      = nbds #number of beads
+        self.bo_pes    = boPes_bool #boolean to decide if we use Born-Oppenheimer (adiabatic) surfaces. Diabats by default.
 
         #Initialize set of electronic Hamiltonian matrices and they're nuclear derivatives
-        self.Hel   = np.zeros( [ nbds, nstates, nstates ] )
-        self.d_Hel = np.zeros( [ nbds, nnuc, nstates, nstates ] )
+        if self.bo_pes == False:
+            self.Hel   = np.zeros( [ nbds, nstates, nstates ] )
+            self.d_Hel = np.zeros( [ nbds, nnuc, nstates, nstates ] )
+
+        else:
+            self.Hel   = np.zeros( [ nbds, nstates ] )
+            self.d_Hel = np.zeros( [ nbds, nnuc, nstates ] )
 
     #####################################################################
 
@@ -103,6 +111,28 @@ class potential(ABC):
 
     ###############################################################
 
+    def calc_NAC(self, nucR, Hel, d_Hel):
+        
+        #Function that calculates the non-adiabatic coupling terms
+        NAC = np.zeros([self.nbds, self.nnuc])
+
+        return NAC
+
+    ###############################################################
+
+    def get_bopes(self, Hel):
+
+        #Calculate the BO PES's by directly diagonalizing the diabatic Hel
+        #XXX
+        for i in range(Hel.shape[0]):
+            Hel_a = Hel[i]
+            S = np.identity(len(Hel_a))
+            E, C = la.eigh(Hel_a, S)
+
+        return E, C
+
+    ###############################################################
+
     @abstractmethod
     def calc_Hel( self ):
         pass
@@ -132,6 +162,26 @@ class potential(ABC):
         pass
 
     ###############################################################
+
+class BO_PES(ABC):
+
+    #####################################################################
+
+    @abstractmethod
+    def __init__( self, potname, potparams, nstates, nnuc, nbds ):
+
+        self.potname   = potname #string corresponding to the name of the potential
+        self.potparams = potparams #array defining the necessary constants for the potential
+        self.nstates   = nstates #number of electronic states
+        self.nnuc      = nnuc #number of nuclei
+        self.nbds      = nbds #number of beads
+
+        #Initialize set of electronic Hamiltonian matrices and they're nuclear derivatives
+        self.Hel   = np.zeros( [ nbds, nstates ] )
+        self.d_Hel = np.zeros( [ nbds, nnuc, nstates ] )
+        self.NAC   = np.zeros( [ nbds, nnuc ] )
+
+    #####################################################################
 
 
 ####### DEFINED POTENTIALS AS INSTANCES OF PARENT POTENTIAL CLASS #######

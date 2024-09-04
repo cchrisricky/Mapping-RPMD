@@ -57,7 +57,6 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
             return dnucR, dnucP, dmapSx, dmapSy, dmapSz
 
-
     #####################################################################
 
     def get_timederiv_nucR( self ):
