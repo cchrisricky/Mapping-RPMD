@@ -38,23 +38,17 @@ class potential(ABC):
     #####################################################################
 
     @abstractmethod
-    def __init__( self, potname, potparams, nstates, nnuc, nbds, boPes_bool=False ):
+    def __init__( self, potname, potparams, nstates, nnuc, nbds ):
 
         self.potname   = potname #string corresponding to the name of the potential
         self.potparams = potparams #array defining the necessary constants for the potential
         self.nstates   = nstates #number of electronic states
         self.nnuc      = nnuc #number of nuclei
         self.nbds      = nbds #number of beads
-        self.bo_pes    = boPes_bool #boolean to decide if we use Born-Oppenheimer (adiabatic) surfaces. Diabats by default.
 
         #Initialize set of electronic Hamiltonian matrices and they're nuclear derivatives
-        if self.bo_pes == False:
-            self.Hel   = np.zeros( [ nbds, nstates, nstates ] )
-            self.d_Hel = np.zeros( [ nbds, nnuc, nstates, nstates ] )
-
-        else:
-            self.Hel   = np.zeros( [ nbds, nstates ] )
-            self.d_Hel = np.zeros( [ nbds, nnuc, nstates ] )
+        self.Hel   = np.zeros( [ nbds, nstates, nstates ] )
+        self.d_Hel = np.zeros( [ nbds, nnuc, nstates, nstates ] )
 
     #####################################################################
 
@@ -111,10 +105,17 @@ class potential(ABC):
 
     ###############################################################
 
-    def calc_NAC(self, nucR, Hel, d_Hel):
+    def calc_NAC(self, Hel, d_Hel):
         
         #Function that calculates the non-adiabatic coupling terms
         NAC = np.zeros([self.nbds, self.nnuc])
+        for i in range(self.nbds):
+            V = Hel[i,0,0]
+            D = Hel[i,0,1]
+            d_V = d_Hel[i,:,0,0]
+            d_D = d_Hel[i,:,0,1]
+
+            NAC[i] = ( D * d_V - V * d_D )/(V**2+D**2)/2
 
         return NAC
 
@@ -122,15 +123,26 @@ class potential(ABC):
 
     def get_bopes(self, Hel):
 
-        #Calculate the BO PES's by directly diagonalizing the diabatic Hel
+        #Calculate the BO PES's by directly diagonalizing the 2-state diabatic Hel
+        #Making sure that Hel has a symmetric formation, i.e., Hel[0,0] = -Hel[1,1]
         #XXX
-        for i in range(Hel.shape[0]):
-            Hel_a = Hel[i]
-            S = np.identity(len(Hel_a))
-            E, C = la.eigh(Hel_a, S)
 
-        return E, C
+        H_bo = np.zeros((self.nbds, self.nstates))
 
+        for i in range (self.nbds):
+            H_diab = Hel[i]
+            if (H_diab.shape != (2,2)):
+                print('ERROR: the diabatic Hel does not have a size of 2*2')
+                exit()
+            if (np.abs(H_diab[0,0]+H_diab[1,1])<1e-5):
+                print('ERROR: the diabatic Hel is not symmetric at bead', i)
+                exit()
+
+            H_bo[i,0] = np.sqrt(Hel[0,0]**2 + Hel[0,1])
+            H_bo[i,1] = -H_bo[i,0]
+
+        return H_bo
+    
     ###############################################################
 
     @abstractmethod
@@ -164,8 +176,7 @@ class potential(ABC):
     ###############################################################
 
 class BO_PES(ABC):
-
-    #####################################################################
+    #The class that directly has the numerical adiabatic PESs without calculating diabatic energies
 
     @abstractmethod
     def __init__( self, potname, potparams, nstates, nnuc, nbds ):
