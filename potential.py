@@ -107,7 +107,7 @@ class potential(ABC):
 
     def calc_NAC(self, Hel, d_Hel):
         
-        #Function that calculates the non-adiabatic coupling terms
+        #Function that calculates the non-adiabatic coupling terms from 2-level diabatic surfaces
         NAC = np.zeros([self.nbds, self.nnuc])
         for i in range(self.nbds):
             V = Hel[i,0,0]
@@ -134,7 +134,7 @@ class potential(ABC):
             if (H_diab.shape != (2,2)):
                 print('ERROR: the diabatic Hel does not have a size of 2*2')
                 exit()
-            if (np.abs(H_diab[0,0]+H_diab[1,1])<1e-5):
+            if (np.abs(H_diab[0,0]+H_diab[1,1])>1e-5):
                 print('ERROR: the diabatic Hel is not symmetric at bead', i)
                 exit()
 
@@ -142,6 +142,9 @@ class potential(ABC):
             H_bo[i,1] = -H_bo[i,0]
 
         return H_bo
+    
+    def get_bopes_derivs(self, Hel, d_Hel):
+        pass #BO_derivs
     
     ###############################################################
 
@@ -892,7 +895,6 @@ class pengfei_polariton(potential):
             exit()
 
 #########################################################################
-
 
 class isolated_elec(potential):
 

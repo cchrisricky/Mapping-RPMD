@@ -92,7 +92,7 @@ class mash_rpmd( map_rpmd.map_rpmd ):
                 d_nucP +=  0.5 * np.einsum( 'ijnn -> ij', self.potential.d_Hel )
         else:
             #The MASH nuclear force, note that Hel here are adiabatic surfaces
-            d_nucP += - self.potential.d_Hel * np.sign(self.mapSz)
+            d_nucP += - self.potential.d_Hel * np.sign(self.mapSz) #Warning: be careful of the size of mapSz
 
         return d_nucP
 
