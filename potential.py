@@ -129,7 +129,7 @@ class potential(ABC):
 
         H_bo = np.zeros((self.nbds, self.nstates))
 
-        for i in range (self.nbds):
+        for i in range(self.nbds):
             H_diab = Hel[i]
             if (H_diab.shape != (2,2)):
                 print('ERROR: the diabatic Hel does not have a size of 2*2')
@@ -138,14 +138,30 @@ class potential(ABC):
                 print('ERROR: the diabatic Hel is not symmetric at bead', i)
                 exit()
 
-            H_bo[i,0] = np.sqrt(Hel[0,0]**2 + Hel[0,1])
+            H_bo[i,0] = np.sqrt(H_diab[0,0]**2 + H_diab[0,1]**2)
             H_bo[i,1] = -H_bo[i,0]
 
         return H_bo
     
     def get_bopes_derivs(self, Hel, d_Hel):
-        pass #BO_derivs
-    
+        
+        d_H_bo = np.zeros((self.nbds, self.nstates))
+
+        for i in range(self.nbds):
+            H_diab = Hel[i]
+            dH_diab = d_Hel[i]
+            if (H_diab.shape != (2,2)):
+                print('ERROR: the diabatic Hel does not have a size of 2*2')
+                exit()
+            if (np.abs(H_diab[0,0]+H_diab[1,1])>1e-5):
+                print('ERROR: the diabatic Hel is not symmetric at bead', i)
+                exit()
+
+            d_H_bo[i,0] = (H_diab[0,0]*dH_diab[0,0] + H_diab[0,1]*dH_diab[0,1])/np.sqrt(H_diab[0,0]**2 + H_diab[0,1]**2)
+            d_H_bo[i,1] = -d_H_bo[i,0]
+
+        return d_H_bo
+
     ###############################################################
 
     @abstractmethod
