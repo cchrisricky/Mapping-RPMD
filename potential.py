@@ -109,13 +109,22 @@ class potential(ABC):
         
         #Function that calculates the non-adiabatic coupling terms from 2-level diabatic surfaces
         NAC = np.zeros([self.nbds, self.nnuc])
-        for i in range(self.nbds):
-            V = Hel[i,0,0]
-            D = Hel[i,0,1]
-            d_V = d_Hel[i,:,0,0]
-            d_D = d_Hel[i,:,0,1]
 
-            NAC[i] = ( D * d_V - V * d_D )/(V**2+D**2)/2
+        H_bo = self.get_bopes(Hel)
+        d_H_bo = self.get_bopes_derivs(Hel)
+
+        for i in range(self.nbds):
+            V0 = Hel[i,0,0]
+            V1 = Hel[i,1,1]
+            D = Hel[i,0,1]
+            Vz = H_bo[i,1]
+            d_V0 = d_Hel[i,:,0,0]
+            d_V1 = d_Hel[i,:,1,1]
+            d_D = d_Hel[i,:,0,1]
+            d_Vz = d_H_bo[i,1]
+
+            #NAC[i] = ( D * d_V - V * d_D )/(V**2+D**2)/2
+            NAC[i] = 2 / ((V0 - V1 + 2 * Vz)**2 + 4 * np.abs(D)**2) * ((V0 - V1 + 2 * Vz) * d_D - D * (d_V0 - d_V1 + 2 * d_Vz))
 
         return NAC
 
@@ -138,7 +147,7 @@ class potential(ABC):
                 print('ERROR: the diabatic Hel is not symmetric at bead', i)
                 exit()
 
-            H_bo[i,0] = np.sqrt(H_diab[0,0]**2 + H_diab[0,1]**2)
+            H_bo[i,0] = -np.sqrt(H_diab[0,0]**2 + H_diab[0,1]**2)
             H_bo[i,1] = -H_bo[i,0]
 
         return H_bo
@@ -157,7 +166,7 @@ class potential(ABC):
                 print('ERROR: the diabatic Hel is not symmetric at bead', i)
                 exit()
 
-            d_H_bo[i,0] = (H_diab[0,0]*dH_diab[0,0] + H_diab[0,1]*dH_diab[0,1])/np.sqrt(H_diab[0,0]**2 + H_diab[0,1]**2)
+            d_H_bo[i,0] = -(H_diab[0,0]*dH_diab[0,0] + H_diab[0,1]*dH_diab[0,1])/np.sqrt(H_diab[0,0]**2 + H_diab[0,1]**2)
             d_H_bo[i,1] = -d_H_bo[i,0]
 
         return d_H_bo

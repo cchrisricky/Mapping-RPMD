@@ -128,7 +128,9 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
     def get_timederiv_mapSx( self ):
 
-        d_mapSx = 2 * np.sum(self.NAC * self.nucP, axis = 1) / self.mass * self.mapSz - 2 * self.potential.Hel * self.mapSy
+        Vz = self.potential.get_bopes(self.potential.Hel)[:,1]
+ 
+        d_mapSx = 2 * np.sum(self.NAC * self.nucP, axis = 1) / self.mass * self.mapSz - 2 * Vz * self.mapSy
 
         return d_mapSx
 
@@ -136,8 +138,10 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
     def get_timederiv_mapSyz(self):
 
+        Vz = self.potential.get_bopes(self.potential.Hel)[:,1]
+
         d_mapSy = 2 * np.sum(self.NAC * self.nucP, axis = 1) / self.mass * self.mapSx
-        d_mapSz = -2 * self.potential.Hel * self.mapSx
+        d_mapSz = -2 * Vz * self.mapSx
 
         return d_mapSy, d_mapSz
 
@@ -197,4 +201,14 @@ class mash_rpmd( map_rpmd.map_rpmd ):
             print('ERROR: Size of spin mapping variable Sz doesnt match bead number')
             exit()
 
-    
+    #####################################################################
+
+    def get_sampling_eng(self):
+        return None
+
+    #####################################################################
+
+    def print_data( self, step ):
+        return None
+
+
