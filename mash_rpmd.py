@@ -78,8 +78,7 @@ class mash_rpmd( map_rpmd.map_rpmd ):
         else:
             d_nucP = super().get_timederiv_nucP( intRP_bool = False )
 
-        #Calculate nuclear derivative of electronic Hamiltonian matrix
-        self.potential.calc_Hel_deriv( self.nucR )
+        d_Vz = self.potential.get_bopes_derivs()[:,:,1]
 
         if (self.spin_map==False):
             #Calculate contribution from MMST term
@@ -92,7 +91,7 @@ class mash_rpmd( map_rpmd.map_rpmd ):
                 d_nucP +=  0.5 * np.einsum( 'ijnn -> ij', self.potential.d_Hel )
         else:
             #The MASH nuclear force, note that Hel here are adiabatic surfaces
-            d_nucP += - self.potential.d_Hel * np.sign(self.mapSz) #Warning: be careful of the size of mapSz
+            d_nucP += - d_Vz * np.sign(self.mapSz) #Warning: be careful of the size of mapSz
 
         return d_nucP
 
@@ -128,9 +127,10 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
     def get_timederiv_mapSx( self ):
 
-        Vz = self.potential.get_bopes(self.potential.Hel)[:,1]
- 
-        d_mapSx = 2 * np.sum(self.NAC * self.nucP, axis = 1) / self.mass * self.mapSz - 2 * Vz * self.mapSy
+        Vz = self.potential.get_bopes()[:,1]
+        NAC = self.potential.calc_NAC()
+
+        d_mapSx = 2 * np.sum(NAC * self.nucP / self.mass, axis = 1) * self.mapSz - 2 * Vz * self.mapSy
 
         return d_mapSx
 
@@ -138,9 +138,10 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
     def get_timederiv_mapSyz(self):
 
-        Vz = self.potential.get_bopes(self.potential.Hel)[:,1]
+        Vz = self.potential.get_bopes()[:,1]
+        NAC = self.potential.calc_NAC()
 
-        d_mapSy = 2 * np.sum(self.NAC * self.nucP, axis = 1) / self.mass * self.mapSx
+        d_mapSy = 2 * np.sum(NAC * self.nucP / self.mass, axis = 1) * self.mapSx
         d_mapSz = -2 * Vz * self.mapSx
 
         return d_mapSy, d_mapSz
