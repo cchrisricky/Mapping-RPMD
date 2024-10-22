@@ -19,7 +19,7 @@ class integrator():
 
         #Want to actually save time-derivative of nuclear momentum from step to step if doing
         #velocity-verlet, analytical, or cayley integration
-        if( self.intype == 'vv' or self.intype == 'analyt' or self.intype == 'cayley' ):
+        if( self.intype == 'vv' or self.intype == 'analyt' or self.intype == 'cayley'):
             self.d_nucP_for_vv = None
             print( 'Number of steps for internal mapping-variable velocity-verlet loop is = ',small_dt_ratio )
 
