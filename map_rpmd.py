@@ -946,7 +946,7 @@ class map_rpmd(ABC):
             print( 'ERROR: The momentum of the nuclei was not defined' )
             exit()
 
-        if( self.mapR is None  ):
+        if( self.mapR is None ):
             print( 'ERROR: The position of the mapping variables was not defined' )
             exit()
 

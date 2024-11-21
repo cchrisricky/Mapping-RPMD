@@ -3,6 +3,7 @@ import utils
 import sys
 from scipy.linalg import expm
 from scipy.special import erf
+import math
 
 #Define class for Mash-rpmd
 #It's a child-class of the rpmd parent class
@@ -42,8 +43,8 @@ class mash_rpmd( map_rpmd.map_rpmd ):
         #converting to string, taking the length, and subtracting 2 (for the 0.) gives us the length of just the decimal component
         tDigits = len( str( math.modf(Nprint * delt)[0] ) ) - 2
 
-        #Error checks
-        self.dynam_error_check( Nsteps, delt, intype )
+        #Error checks REMINDER TO REWITE THIS GUY FOR MASH
+        #self.dynam_error_check( Nsteps, delt, intype )
 
         #Initialize the integrator
         self.integ = integrator.integrator( self, delt, intype, small_dt_ratio )
@@ -176,7 +177,7 @@ class mash_rpmd( map_rpmd.map_rpmd ):
             if (self.functional_param != None):
                 Vz = self.potential.get_bopes()[:,1]
                 NAC = self.potential.calc_NAC()
-                d_nucP += -d_Vz * erf(self.mapSz / self.functional_param) + 4 Vz * NAC * self.mapSx * np.exp(-(self.mapSz / self.functional_param)**2) / (self.functional_param * np.sqrt(np.pi))
+                d_nucP += -d_Vz * erf(self.mapSz / self.functional_param) + 4 * Vz * NAC * self.mapSx * np.exp(-(self.mapSz / self.functional_param)**2) / (self.functional_param * np.sqrt(np.pi))
             else:
                 d_nucP += -d_Vz * np.sign(self.mapSz)
 
@@ -237,7 +238,12 @@ class mash_rpmd( map_rpmd.map_rpmd ):
     
     def get_2nd_timederiv_mapSx( self, d_mapSy, d_mapSz):
 
-        d2_mapSx = 2 * np.sum(self.NAC * self.nucP, axis = 1) / self.mass * d_mapSz - 2 * self.potential.Hel * d_mapSy
+        Vz = self.potential.get_bopes()[:,1]
+        NAC = self.potential.calc_NAC()
+
+        print(np.sum(NAC * self.nucP / self.mass, axis = 1))
+
+        d2_mapSx = 2 * np.sum(NAC * self.nucP / self.mass, axis = 1) * d_mapSz - 2 * Vz * d_mapSy
 
         return d2_mapSx
 
