@@ -2,6 +2,8 @@ import numpy as np
 import utils
 import sys
 from scipy.linalg import expm
+from scipy.special import erf
+import math
 
 #Define class for Mash-rpmd
 #It's a child-class of the rpmd parent class
@@ -11,7 +13,7 @@ import integrator
 
 class mash_rpmd( map_rpmd.map_rpmd ):
 
-    def __init__( self, nstates=1, nnuc=1, nbds=1, beta=1.0, mass=1.0, potype=None, potparams=None, mapR=None, mapP=None, mapSx=None, mapSy=None, mapSz=None, nucR=None, nucP=None, spinmap_bool=False):
+    def __init__( self, nstates=1, nnuc=1, nbds=1, beta=1.0, mass=1.0, potype=None, potparams=None, mapR=None, mapP=None, mapSx=None, mapSy=None, mapSz=None, nucR=None, nucP=None, spinmap_bool=False, functional_param=1.):
 
         super().__init__( 'RP-MASH', nstates, nnuc, nbds, beta, mass, potype, potparams, mapR, mapP, nucR, nucP )
 
@@ -28,7 +30,88 @@ class mash_rpmd( map_rpmd.map_rpmd ):
             self.spin_map_error_check()
         
         self.spin_map = spinmap_bool #Boolean that decide if we use spin mapping variables
+        self.functional_param = functional_param
 
+    #####################################################################
+
+    def run_dynamics( self, Nsteps=None, Nprint=100, delt=None, intype=None, init_time=0.0, small_dt_ratio=1 ):
+
+        #Top-level routine to run dynamics specific to MASH
+
+        #Number of decimal places when printing current time
+        #modf splits the floating number into integer and decimal components
+        #converting to string, taking the length, and subtracting 2 (for the 0.) gives us the length of just the decimal component
+        tDigits = len( str( math.modf(Nprint * delt)[0] ) ) - 2
+
+        #Error checks REMINDER TO REWITE THIS GUY FOR MASH
+        #self.dynam_error_check( Nsteps, delt, intype )
+
+        #Initialize the integrator
+        self.integ = integrator.integrator( self, delt, intype, small_dt_ratio )
+
+        #Automatically initialize nuclear momentum from MB distribution if none have been specified
+        if( self.nucP is None ):
+            print('Automatically initializing nuclear momentum to Maxwell-Boltzmann distribution at beta_p = ', self.beta_p*self.nbds ,' / ',self.nbds)
+            self.get_nucP_MB()
+
+        print()
+        print( '#########################################################' )
+        print( 'Running', self.methodname, 'Dynamics for', Nsteps, 'Steps' )
+        print( '#########################################################' )
+        print()
+
+        #Open output files
+        self.file_output = open( 'output.dat', 'w' )
+        self.file_nucR   = open( 'nucR.dat','w' )
+        self.file_nucP   = open( 'nucP.dat', 'w' )
+        self.file_mapSx   = open( 'mapSx.dat','w' )
+        self.file_mapSy   = open( 'mapSy.dat','w' )
+        self.file_mapSz   = open( 'mapSz.dat','w' )
+        #self.file_mapR   = open( 'mapR.dat','w' )
+        #self.file_mapP   = open( 'mapP.dat', 'w' )
+        #self.file_Q      = open( 'Q.dat', 'w')
+        #self.file_phi    = open( 'phi.dat', 'w')
+        #self.file_semi   = open( 'mvsq.dat', 'w')
+
+        current_time = init_time
+        step = 0
+        for step in range( Nsteps ):
+
+            #Print data starting with initial time
+            if( np.mod( step, Nprint ) == 0 ):
+                print('Writing data at step', step, 'and time', format(current_time, '.'+str(tDigits)+'f'), 'for', self.methodname, 'Dynamics calculation')
+                self.print_data( current_time )
+                sys.stdout.flush()
+
+            #Integrate EOM by one time-step
+            self.integ.onestep( self, step )
+
+            #Increase current time
+            current_time = init_time + delt * (step+1)
+
+        #Print data at final step regardless of Nprint
+        print('Writing data at step ', step+1, 'and time', format(current_time, '.'+str(tDigits)+'f'), 'for', self.methodname, 'Dynamics calculation')
+        self.print_data( current_time )
+        sys.stdout.flush()
+
+        #Close output files
+        self.file_output.close()
+        self.file_nucR.close()
+        self.file_nucP.close()
+        self.file_mapSx.close()
+        self.file_mapSy.close()
+        self.file_mapSz.close()
+        #self.file_mapR.close()
+        #self.file_mapP.close()
+        #self.file_Q.close()
+        #self.file_phi.close()
+        #self.file_semi.close()
+
+        print()
+        print( '#########################################################' )
+        print( 'END', self.methodname, 'Dynamics' )
+        print( '#########################################################' )
+        print()
         
     #####################################################################
 
@@ -78,8 +161,6 @@ class mash_rpmd( map_rpmd.map_rpmd ):
         else:
             d_nucP = super().get_timederiv_nucP( intRP_bool = False )
 
-        d_Vz = self.potential.get_bopes_derivs()[:,:,1]
-
         if (self.spin_map==False):
             #Calculate contribution from MMST term
             #XXX could maybe make this faster getting rid of double index in einsum
@@ -91,7 +172,14 @@ class mash_rpmd( map_rpmd.map_rpmd ):
                 d_nucP +=  0.5 * np.einsum( 'ijnn -> ij', self.potential.d_Hel )
         else:
             #The MASH nuclear force, note that Hel here are adiabatic surfaces
-            d_nucP += - d_Vz * np.sign(self.mapSz) #Warning: be careful of the size of mapSz
+            d_Vz = self.potential.get_bopes_derivs()[:,:,1]
+            #Calculate delta function force as functional limit or with adaptive timestep
+            if (self.functional_param != None):
+                Vz = self.potential.get_bopes()[:,1]
+                NAC = self.potential.calc_NAC()
+                d_nucP += -d_Vz * erf(self.mapSz / self.functional_param) + 4 * Vz * NAC * self.mapSx * np.exp(-(self.mapSz / self.functional_param)**2) / (self.functional_param * np.sqrt(np.pi))
+            else:
+                d_nucP += -d_Vz * np.sign(self.mapSz)
 
         return d_nucP
 
@@ -150,7 +238,12 @@ class mash_rpmd( map_rpmd.map_rpmd ):
     
     def get_2nd_timederiv_mapSx( self, d_mapSy, d_mapSz):
 
-        d2_mapSx = 2 * np.sum(self.NAC * self.nucP, axis = 1) / self.mass * d_mapSz - 2 * self.potential.Hel * d_mapSy
+        Vz = self.potential.get_bopes()[:,1]
+        NAC = self.potential.calc_NAC()
+
+        print(np.sum(NAC * self.nucP / self.mass, axis = 1))
+
+        d2_mapSx = 2 * np.sum(NAC * self.nucP / self.mass, axis = 1) * d_mapSz - 2 * Vz * d_mapSy
 
         return d2_mapSx
 
@@ -210,6 +303,7 @@ class mash_rpmd( map_rpmd.map_rpmd ):
     #####################################################################
 
     def print_data( self, step ):
+        print(self.mapSz)
         return None
 
 
