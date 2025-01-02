@@ -284,18 +284,17 @@ class integrator():
         small_dt = self.delt / self.small_dt_ratio
         for _ in range( self.small_dt_ratio ):
 
-            #Calculate first time derivative of mapping position and momentum
-            d_mapR = map_rpmd.get_timederiv_mapR()
+            #Calculate first time derivative of mapping momentum
             d_mapP = map_rpmd.get_timederiv_mapP()
-
-            #Calculate second time derivative of mapping position
-            d2_mapR = map_rpmd.get_2nd_timederiv_mapR( d_mapP )
-
-            #Update mapping position by 1/2 a time-step
-            self.update_vv_mapR( map_rpmd, d_mapR, d2_mapR, small_dt )
-
+            
             #Update mapping momentum by 1/4 a time-step
             self.update_vv_mapP( map_rpmd, d_mapP, small_dt )
+
+            #Calculate the time derivative of the mapping position accordingly
+            d_mapR = map_rpmd.get_timederiv_mapR()
+
+            #Update mapping position by 1/2 a time-step
+            self.update_vv_mapR( map_rpmd, d_mapR, small_dt )
 
             #Update first time derivative of mapping position at new 1/2 time-step
             d_mapP = map_rpmd.get_timederiv_mapP()
@@ -312,54 +311,70 @@ class integrator():
 
     ###############################################################
 
-    def update_vv_mapR( self, map_rpmd, d_mapR, d2_mapR, small_dt ):
+    def update_vv_mapR( self, map_rpmd, d_mapR, small_dt ):
 
         #Update mapping position by 1/2 a time-step
-        map_rpmd.mapR += 0.5 * d_mapR * small_dt + 1.0/8.0 * d2_mapR * small_dt**2
+        map_rpmd.mapR += 0.5 * d_mapR * small_dt
 
     ###############################################################
     
     def update_vv_mapSyz( self, map_rpmd, d_mapSy, d_mapSz, small_dt ):
 
         #Update spin-yz by a 1/4 a time-step
+        mapSz_0 = np.copy(map_rpmd.mapSz)
         map_rpmd.mapSy += 0.25 * d_mapSy * small_dt
         map_rpmd.mapSz += 0.25 * d_mapSz * small_dt
 
+        if ( np.sign(mapSz_0)!=np.sign(map_rpmd.mapSz) ):
+
+            Vz = map_rpmd.potential.get_bopes(map_rpmd.nucR)[:, 1]
+            NAC = map_rpmd.potential.calc_NAC(map_rpmd.nucR)
+            unit_NAC = NAC / np.sqrt(np.sum( NAC**2 ))
+
+            nucP_NAC_norm =  np.sum(map_rpmd.nucP * unit_NAC) #the norm of the nuclear momentum along the NAC direction
+            KE_eff = nucP_NAC_norm**2 * np.sum(unit_NAC**2 / map_rpmd.mass[np.newaxis, :]) / 2 # the effective kinetic energy along the NAC direction
+
+            if ( mapSz_0 > 0 or KE_eff > 2*np.sum(Vz) ):
+                
+                print("Vz =", np.sum(Vz))
+                # The hopping happens: transferring to a lower state or the kenitic energy is sufficient
+                # reach the point of a potential surface hopping. The momentum rescaling is about to be performed
+                # KE_eff += 2 * Vz * np.sign( Sz,final )
+                d_nucP2 = 2*np.sum(Vz)*np.sign(mapSz_0) * ( unit_NAC**2 / np.sum(unit_NAC**2 / map_rpmd.mass[np.newaxis, :] / 2) )
+
+                map_rpmd.nucP = np.sign(map_rpmd.nucP) * np.sqrt(map_rpmd.nucP**2+d_nucP2)
+                                  
     ###############################################################
 
-    def update_vv_mapSx( self, map_rpmd, d_mapSx, d2_mapSx, small_dt):
+    def update_vv_mapSx( self, map_rpmd, d_mapSx, small_dt):
 
         #Update spin-x by 1/2 a time-step
-        map_rpmd.mapSx += 0.5 * d_mapSx * small_dt + 1.0/8.0 * d2_mapSx * small_dt**2
+        map_rpmd.mapSx += 0.5 * d_mapSx * small_dt
 
     ###############################################################
     def update_vv_mapS(self, map_rpmd):
-        #Internal velocity-verlet algorithm for mapping variables
+        #Internal velocity-verlet algorithm for spin mapping variables
         #Run for small_dt_ratio number of steps for each nuclear update
 
         small_dt = self.delt / self.small_dt_ratio
         for _ in range( self.small_dt_ratio ):
 
-            #Calculate first time derivative of mapping position and momentum
+            #Calculate first time derivative of mapping 'momentum' - mapping Sy and Sz
+            d_mapSy, d_mapSz = map_rpmd.get_timederiv_mapSyz()
+
+            #Update mapping 'momentum' by 1/4 a time-step
+            self.update_vv_mapSyz( map_rpmd, d_mapSy, d_mapSz, small_dt )
+
+            #Calculate the time derivative of mapSx accordingly
             d_mapSx = map_rpmd.get_timederiv_mapSx()
+
+            #Update mapping 'position' by 1/2 a time-step
+            self.update_vv_mapSx( map_rpmd, d_mapSx, small_dt )
+
+            #Update first time derivative of mapping 'momentum' at new 1/2 time-step and make it to a full 1/2 time-step
             d_mapSy, d_mapSz = map_rpmd.get_timederiv_mapSyz()
-
-            #Calculate second time derivative of mapping position
-            d2_mapSx = map_rpmd.get_2nd_timederiv_mapSx( d_mapSy, d_mapSz )
-
-            #Update mapping position by 1/2 a time-step
-            self.update_vv_mapSx( map_rpmd, d_mapSx, d2_mapSx, small_dt )
-
-            #Update mapping momentum by 1/4 a time-step
             self.update_vv_mapSyz( map_rpmd, d_mapSy, d_mapSz, small_dt )
 
-            #Update first time derivative of mapping position at new 1/2 time-step
-            d_mapSy, d_mapSz = map_rpmd.get_timederiv_mapSyz()
-
-            #Update mapping momentum by 1/4 a time-step
-            self.update_vv_mapSyz( map_rpmd, d_mapSy, d_mapSz, small_dt )
-
-    ###############################################################
     ###############################################################
 
     def abm( self, map_rpmd, step ):

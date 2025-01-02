@@ -13,7 +13,7 @@ import integrator
 
 class mash_rpmd( map_rpmd.map_rpmd ):
 
-    def __init__( self, nstates=1, nnuc=1, nbds=1, beta=1.0, mass=1.0, potype=None, potparams=None, mapR=None, mapP=None, mapSx=None, mapSy=None, mapSz=None, nucR=None, nucP=None, spinmap_bool=False, functional_param=1.):
+    def __init__( self, nstates, nnuc=1, nbds=1, beta=1.0, mass=1.0, potype=None, potparams=None, mapR=None, mapP=None, mapSx=None, mapSy=None, mapSz=None, nucR=None, nucP=None, spinmap_bool=False, functional_param=1.):
 
         super().__init__( 'RP-MASH', nstates, nnuc, nbds, beta, mass, potype, potparams, mapR, mapP, nucR, nucP )
 
@@ -30,7 +30,7 @@ class mash_rpmd( map_rpmd.map_rpmd ):
             self.spin_map_error_check()
         
         self.spin_map = spinmap_bool #Boolean that decide if we use spin mapping variables
-        self.functional_param = functional_param
+        self.functional_param = functional_param #XXX comments needed
 
     #####################################################################
 
@@ -153,7 +153,7 @@ class mash_rpmd( map_rpmd.map_rpmd ):
         #Subroutine to calculate the time-derivative of the nuclear momenta for each bead
 
         #Force associated with harmonic springs between beads and the state-independent portion of the potential
-        #This is dealt with in the parent class
+        #This is dealt with in the parent class  
         #If intRP_bool is False it does not calculate the contribution from the harmonic ring polymer springs
 
         if (self.nbds > 1):
@@ -170,20 +170,22 @@ class mash_rpmd( map_rpmd.map_rpmd ):
             #add the state-average potential
             if (self.potype != 'harm_lin_cpl_symmetrized' or self.potype != 'harm_lin_cpl_sym_2'):
                 d_nucP +=  0.5 * np.einsum( 'ijnn -> ij', self.potential.d_Hel )
+        
         else:
             #The MASH nuclear force, note that Hel here are adiabatic surfaces
-            d_Vz = self.potential.get_bopes_derivs()[:,:,1]
+            d_Vz = self.potential.get_bopes_derivs(self.nucR)[:,:,1]
             #Calculate delta function force as functional limit or with adaptive timestep
             if (self.functional_param != None):
-                Vz = self.potential.get_bopes()[:,1]
-                NAC = self.potential.calc_NAC()
-                d_nucP += -d_Vz * erf(self.mapSz / self.functional_param) + 4 * Vz * NAC * self.mapSx * np.exp(-(self.mapSz / self.functional_param)**2) / (self.functional_param * np.sqrt(np.pi))
+                Vz = self.potential.get_bopes(self.nucR)[:,1]
+                NAC = self.potential.calc_NAC(self.nucR)
+                d_nucP += -d_Vz * erf(self.mapSz[:,np.newaxis] / self.functional_param) + 4 * Vz[:,np.newaxis] * NAC * self.mapSx[:,np.newaxis] * np.exp(-(self.mapSz[:,np.newaxis] / self.functional_param)**2) / (self.functional_param * np.sqrt(np.pi))
+                #d_nucP += -d_Vz * np.sign(self.mapSz[:,np.newaxis])
             else:
-                d_nucP += -d_Vz * np.sign(self.mapSz)
+                d_nucP += -d_Vz * np.sign(self.mapSz[:,np.newaxis])
 
         return d_nucP
 
-   #####################################################################
+    #####################################################################
 
     def get_timederiv_mapR( self ):
         #Subroutine to calculate the time-derivative of just the mapping position for each bead
@@ -192,7 +194,7 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
         return d_mapR
 
-   #####################################################################
+    #####################################################################
 
     def get_timederiv_mapP( self ):
         #Subroutine to calculate the time-derivative of just the mapping momentum for each bead
@@ -201,7 +203,7 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
         return d_mapP
 
-   #####################################################################
+    #####################################################################
 
     def get_2nd_timederiv_mapR( self, d_mapP ):
         #Subroutine to calculate the second time-derivative of just the mapping positions for each bead
@@ -211,37 +213,37 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
         return d2_mapR
 
-   #####################################################################
+    #####################################################################
 
     def get_timederiv_mapSx( self ):
 
-        Vz = self.potential.get_bopes()[:,1]
-        NAC = self.potential.calc_NAC()
+        Vz = self.potential.get_bopes(self.nucR)[:,1]
+        NAC = self.potential.calc_NAC(self.nucR)
 
-        d_mapSx = 2 * np.sum(NAC * self.nucP / self.mass, axis = 1) * self.mapSz - 2 * Vz * self.mapSy
+        d_mapSx = 2 * np.sum( NAC * self.nucP / self.mass, axis = 1 ) * self.mapSz - 2 * Vz * self.mapSy #axis = 1 corresponds to the dimension of nuclear DOFs
 
         return d_mapSx
 
-   #####################################################################
+    #####################################################################
 
     def get_timederiv_mapSyz(self):
 
-        Vz = self.potential.get_bopes()[:,1]
-        NAC = self.potential.calc_NAC()
+        Vz = self.potential.get_bopes(self.nucR)[:,1]
+        NAC = self.potential.calc_NAC(self.nucR)
 
-        d_mapSy = 2 * np.sum(NAC * self.nucP / self.mass, axis = 1) * self.mapSx
-        d_mapSz = -2 * Vz * self.mapSx
+        d_mapSy = 2 * Vz * self.mapSx
+        d_mapSz = -2 * np.sum( NAC * self.nucP / self.mass, axis = 1 ) * self.mapSx
 
         return d_mapSy, d_mapSz
 
-   #####################################################################
+    #####################################################################
     
     def get_2nd_timederiv_mapSx( self, d_mapSy, d_mapSz):
 
-        Vz = self.potential.get_bopes()[:,1]
-        NAC = self.potential.calc_NAC()
+        Vz = self.potential.get_bopes(self.nucR)[:,1]
+        NAC = self.potential.calc_NAC(self.nucR)
 
-        print(np.sum(NAC * self.nucP / self.mass, axis = 1))
+        #print(np.sum(NAC * self.nucP / self.mass, axis = 1))
 
         d2_mapSx = 2 * np.sum(NAC * self.nucP / self.mass, axis = 1) * d_mapSz - 2 * Vz * d_mapSy
 
@@ -273,7 +275,9 @@ class mash_rpmd( map_rpmd.map_rpmd ):
                 engpe += -0.5 * np.sum( np.einsum( 'inn -> i', self.potential.Hel ) )
 
         else:
-            engpe += np.sum(self.potential.Hel * np.sign(self.mapSz))
+            Vz = self.potential.get_bopes(self.nucR)[:,1]
+            engpe += np.sum(Vz * np.sign(self.mapSz))
+            
         return engpe
 
     #####################################################################
@@ -297,13 +301,82 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
     #####################################################################
 
+    def init_map_spin(self, init_state = None):
+
+        #Initialize spin mapping variables by uniformly samping them on the spin sphere
+        #Sx = sin(theta)cos(phi), Sy = sin(theta)sin(phi), Sz = cos(theta)
+        #Sampling by randomly choose cos(theta) in[-1,1], and phi in [0, 2pi]
+        #init_state could be 0 or 1, corresponding to cos_theta equal (-1,0) or (0,1), respectively
+
+        print()
+        print( '#########################################################' )
+        print( 'Initializing SPIN Mapping Variables uniformly on the spin sphere' )
+        print( '#########################################################' )
+        print()
+
+        cos_theta = self.rng.uniform( -1, 1, size = self.nbds )
+        if init_state == 0:
+            cos_theta = self.rng.uniform( -1, 0, size = self.nbds )
+        if init_state == 1:
+            cos_theta = self.rng.uniform( 0, 1, size = self.nbds )
+        sin_theta = np.sqrt( 1 - cos_theta**2 )
+        phi = self.rng.uniform( 0, 2*np.pi, size = self.nbds )
+        
+        self.mapSx = sin_theta * np.cos(phi)
+        self.mapSy = sin_theta * np.sin(phi)
+        self.mapSz = cos_theta
+
+    #####################################################################
+
     def get_sampling_eng(self):
+
+        #XXX-not applicable
         return None
 
     #####################################################################
 
-    def print_data( self, step ):
-        print(self.mapSz)
-        return None
+    def print_data( self, current_time):
+        #Subroutine to calculate and print-out observables of interest
 
+        fmt_str = '%20.8e'
 
+        ###### CALCULATE OBSERVABLES OF INTEREST #######
+
+        #Calculate potential energy associated with mapping variables and nuclear position
+        #This also updates the electronic Hamiltonian matrix
+        engpe = self.get_PE()
+
+        #Calculate Nuclear Kinetic Energy
+        engke = self.potential.calc_nuc_KE( self.nucP, self.mass )
+
+        #Calculate total energy
+        etot = engpe + engke
+
+        #Calculate the center of mass of each ring polymer
+        nucR_com = self.calc_nucR_com()
+
+        ######## PRINT OUT EVERYTHING #######
+        output    = np.zeros(5+self.nnuc)
+        output[0] = current_time
+        output[1] = etot
+        output[2] = engke
+        output[3] = engpe
+        output[4] = np.mean(np.sign(self.mapSz))
+        output[5:] = nucR_com
+        np.savetxt( self.file_output, output.reshape(1, output.shape[0]), fmt_str )
+        self.file_output.flush()
+
+        #columns go as bead_1_nuclei_1 bead_1_nuclei_2 ... bead_1_nuclei_K bead_2_nuclei_1 bead_2_nuclei_2 ...
+        np.savetxt( self.file_nucR, np.insert( self.nucR.flatten(), 0, current_time ).reshape(1, self.nucR.size+1), fmt_str )
+        np.savetxt( self.file_nucP, np.insert( self.nucP.flatten(), 0, current_time ).reshape(1, self.nucP.size+1), fmt_str )
+
+        #columns go as bead_1_state_1 bead_1_state_2 ... bead_1_state_K bead_2_state_1 bead_2_state_2 ...
+        np.savetxt( self.file_mapSx, np.insert( self.mapSx.flatten(), 0, current_time ).reshape(1, self.mapSx.size+1), fmt_str )
+        np.savetxt( self.file_mapSy, np.insert( self.mapSy.flatten(), 0, current_time ).reshape(1, self.mapSy.size+1), fmt_str )
+        np.savetxt( self.file_mapSz, np.insert( self.mapSz.flatten(), 0, current_time ).reshape(1, self.mapSz.size+1), fmt_str )
+
+        self.file_nucR.flush()
+        self.file_nucP.flush()
+        self.file_mapSx.flush()
+        self.file_mapSy.flush()
+        self.file_mapSz.flush()
