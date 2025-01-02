@@ -322,6 +322,7 @@ class integrator():
 
         #Update spin-yz by a 1/4 a time-step
         mapSz_0 = np.copy(map_rpmd.mapSz)
+        mapSy_0 = np.copy(map_rpmd.mapSy)
         map_rpmd.mapSy += 0.25 * d_mapSy * small_dt
         map_rpmd.mapSz += 0.25 * d_mapSz * small_dt
 
@@ -334,15 +335,19 @@ class integrator():
             nucP_NAC_norm =  np.sum(map_rpmd.nucP * unit_NAC) #the norm of the nuclear momentum along the NAC direction
             KE_eff = nucP_NAC_norm**2 * np.sum(unit_NAC**2 / map_rpmd.mass[np.newaxis, :]) / 2 # the effective kinetic energy along the NAC direction
 
-            if ( mapSz_0 > 0 or KE_eff > 2*np.sum(Vz) ):
-                
-                print("Vz =", np.sum(Vz))
+            if ( mapSz_0 > 0 or KE_eff > 2*np.sum(Vz) ):      
                 # The hopping happens: transferring to a lower state or the kenitic energy is sufficient
                 # reach the point of a potential surface hopping. The momentum rescaling is about to be performed
-                # KE_eff += 2 * Vz * np.sign( Sz,final )
-                d_nucP2 = 2*np.sum(Vz)*np.sign(mapSz_0) * ( unit_NAC**2 / np.sum(unit_NAC**2 / map_rpmd.mass[np.newaxis, :] / 2) )
+                # KE_eff += 2 * Vz * np.sign( Sz,init )
 
+                d_nucP2 = 2*np.sum(Vz)*np.sign(mapSz_0) * ( unit_NAC**2 / np.sum(unit_NAC**2 / map_rpmd.mass[np.newaxis, :] / 2) )
                 map_rpmd.nucP = np.sign(map_rpmd.nucP) * np.sqrt(map_rpmd.nucP**2+d_nucP2)
+
+            else:
+                # The hopping is frustrated, momenta will be bounced back
+                map_rpmd.mapSz = mapSz_0
+                map_rpmd.mapSy = mapSy_0
+                map_rpmd.nucP *= -1
                                   
     ###############################################################
 

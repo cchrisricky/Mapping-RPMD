@@ -25,7 +25,7 @@ mash_.potential.calc_Hel_deriv(mash_.nucR)
 #print(mash_.get_2nd_timederiv_mapSx(dSy, dSz))
 #print(mash_.potential.calc_NAC())
 
-mash_.run_dynamics(Nsteps=4000, Nprint=1, delt=0.01, intype="vv", init_time=0.0, small_dt_ratio=1)
+mash_.run_dynamics(Nsteps=4000, Nprint=100, delt=0.01, intype="vv", init_time=0.0, small_dt_ratio=1)
 #print(mash_.potential.Hel)
 #print(mash_.potential.d_Hel)
 
