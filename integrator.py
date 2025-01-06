@@ -329,25 +329,28 @@ class integrator():
 
             Vz = map_rpmd.potential.get_bopes(map_rpmd.nucR)[:, 1]
             NAC = map_rpmd.potential.calc_NAC(map_rpmd.nucR)
-            unit_NAC = NAC / np.sqrt(np.sum( NAC**2 ))
 
-            nucP_NAC =  np.sum(map_rpmd.nucP * unit_NAC) # the collective nuclear momentum along the NAC direction
-            KE_eff = nucP_NAC**2 * np.sum(unit_NAC**2 / map_rpmd.mass[np.newaxis, :]) / 2 # the effective kinetic energy along the NAC direction
+            for i in range(map_rpmd.nbds):
+                if (np.sign(mapSz_0[i])!=np.sign(map_rpmd.mapSz[i])):
+                    unit_NAC = NAC[i] / np.sqrt(np.sum( NAC[i]**2 ))
 
-            if ( mapSz_0 > 0 or KE_eff > 2*np.sum(Vz) ):
-                # The hopping happens: transferring to a lower state or the kenitic energy is sufficient
-                # reach the point of a potential surface hopping. The momentum rescaling is about to be performed
-                # KE_eff += 2 * Vz * np.sign( Sz,init )
+                    nucP_NAC =  np.sum(map_rpmd.nucP[i] * unit_NAC) # the nuclear momentum norm along the NAC direction
+                    KE_eff = nucP_NAC**2 * np.sum(unit_NAC**2 / map_rpmd.mass) / 2 # the effective kinetic energy along the NAC direction
 
-                nucP2_NAC_new = nucP_NAC**2 + 2*np.sum(Vz)*np.sign(mapSz_0) * ( unit_NAC**2 / np.sum(unit_NAC**2 / map_rpmd.mass[np.newaxis, :] / 2) )
-                nucP_NAC_new = np.sign(nucP_NAC) * np.sqrt(nucP2_NAC_new)
-                map_rpmd.nucP += (nucP_NAC_new - nucP_NAC) * unit_NAC
+                    if ( mapSz_0[i] > 0 or KE_eff > Vz[i] ):
+                        # The hopping happens: transferring to a lower state or the kenitic energy is sufficient
+                        # reach the point of a potential surface hopping. The momentum rescaling is about to be performed
+                        # KE_eff += 2 * Vz * np.sign( Sz,init )
 
-            else:
-                # The hopping is frustrated, momenta will be bounced back on the direction of NAC
-                # Sz will be inverse
-                map_rpmd.nucP -= 2*nucP_NAC * unit_NAC
-                map_rpmd.mapSz *= -1
+                        nucP2_NAC_new = nucP_NAC**2 + 2*Vz[i]*np.sign(mapSz_0[i]) * ( unit_NAC**2 / np.sum(unit_NAC**2 / map_rpmd.mass / 2) )
+                        nucP_NAC_new = np.sign(nucP_NAC) * np.sqrt(nucP2_NAC_new)
+                        map_rpmd.nucP[i] += (nucP_NAC_new - nucP_NAC) * unit_NAC
+
+                    else:
+                        # The hopping is frustrated, momenta will be bounced back on the direction of NAC
+                        # Sz will be inverse
+                        map_rpmd.nucP[i] -= 2*nucP_NAC * unit_NAC
+                        map_rpmd.mapSz[i] *= -1
                                   
     ###############################################################
 
