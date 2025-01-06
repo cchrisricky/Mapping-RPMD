@@ -325,7 +325,7 @@ class integrator():
         map_rpmd.mapSy += 0.25 * d_mapSy * small_dt
         map_rpmd.mapSz += 0.25 * d_mapSz * small_dt
 
-        if ( np.sign(mapSz_0)!=np.sign(map_rpmd.mapSz) ):
+        if ( np.array_equal( np.sign(mapSz_0), np.sign(map_rpmd.mapSz) == False ) ):
 
             Vz = map_rpmd.potential.get_bopes(map_rpmd.nucR)[:, 1]
             NAC = map_rpmd.potential.calc_NAC(map_rpmd.nucR)
@@ -334,7 +334,7 @@ class integrator():
                 if (np.sign(mapSz_0[i])!=np.sign(map_rpmd.mapSz[i])):
                     unit_NAC = NAC[i] / np.sqrt(np.sum( NAC[i]**2 ))
 
-                    nucP_NAC =  np.sum(map_rpmd.nucP[i] * unit_NAC) # the nuclear momentum norm along the NAC direction
+                    nucP_NAC = np.sum(map_rpmd.nucP[i] * unit_NAC) # the nuclear momentum norm along the NAC direction
                     KE_eff = nucP_NAC**2 * np.sum(unit_NAC**2 / map_rpmd.mass) / 2 # the effective kinetic energy along the NAC direction
 
                     if ( mapSz_0[i] > 0 or KE_eff > Vz[i] ):

@@ -6,12 +6,12 @@ import mash_rpmd
 import utils
 import linecache
 
-nbds = 1
+nbds = 2
 
 mash_ = mash_rpmd.mash_rpmd(nstates=2, nnuc=1, nbds=nbds, beta=16, mass=np.array([2000]), potype='tully_2ac', 
                             potparams=[np.array([0.1]), np.array([0.28]), np.array([0.015]), np.array([0.06]), np.array([0.05])], 
                             nucR=np.array([[-2.0],]*nbds), nucP=np.array([[15.0],]*nbds),
-                            mapSx=np.array([-3.45072805e-01]), mapSy=np.array([8.98779576e-01]), mapSz=np.array([-0.2704]),
+                            mapSx=np.array([-3.45072805e-01, 3.45072805e-01]), mapSy=np.array([8.98779576e-01, -8.98779576e-01]), mapSz=np.array([-0.2704, 0.2704]),
                             spinmap_bool=True, functional_param=None)
 
 mash_.potential.calc_Hel(mash_.nucR)
