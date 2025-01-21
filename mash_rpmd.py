@@ -7,28 +7,39 @@ import math
 
 #Define class for Mash-rpmd
 #It's a child-class of the rpmd parent class
+#There are two ways to implement the RP-MASH: normal way and centroid approximation
+#Normal: nothing needs to be edit in the __init__;
+#centroid approximation: only the centroid nuclear mode is coupled to electronic states, centroid_bool=True.
 
 import map_rpmd
 import integrator
 
 class mash_rpmd( map_rpmd.map_rpmd ):
 
-    def __init__( self, nstates, nnuc=1, nbds=1, beta=1.0, mass=1.0, potype=None, potparams=None, mapR=None, mapP=None, mapSx=None, mapSy=None, mapSz=None, nucR=None, nucP=None, spinmap_bool=False, functional_param=1.):
+    def __init__( self, nstates, nnuc=1, nbds=1, beta=1.0, mass=1.0, potype=None, potparams=None, 
+                 mapR=None, mapP=None, mapSx=None, mapSy=None, mapSz=None, nucR=None, nucP=None, 
+                 spinmap_bool=False, centroid_bool=False, functional_param=None):
 
         super().__init__( 'RP-MASH', nstates, nnuc, nbds, beta, mass, potype, potparams, mapR, mapP, nucR, nucP )
+        
+        self.spin_map = spinmap_bool # Boolean that decide if we use spin mapping variables
+        self.centroid_bool = centroid_bool # Boolean that decide if we use the centroid of nuclei to be coupled with electronic states
+        self.functional_param = functional_param # The function parameter if the Gaussian function is used for the momentum rescaling
 
         if (spinmap_bool == True):
-
             if (nstates != 2):
                 print('ERROR: The spin mapping variable is only for 2-state systems')
                 exit()
-
             self.mapSx = mapSx
             self.mapSy = mapSy
             self.mapSz = mapSz
-
             self.spin_map_error_check()
         
+        
+        self.spin_map = spinmap_bool #Boolean that decide if we use spin mapping variables
+        self.functional_param = functional_param #XXX comments needed
+
+
         self.spin_map = spinmap_bool #Boolean that decide if we use spin mapping variables
         self.functional_param = functional_param #XXX comments needed
 
@@ -57,6 +68,8 @@ class mash_rpmd( map_rpmd.map_rpmd ):
         print()
         print( '#########################################################' )
         print( 'Running', self.methodname, 'Dynamics for', Nsteps, 'Steps' )
+        print( 'Spin-mapping:', self.spin_map)
+        print( 'centroid approximation:', self.centroid_bool)
         print( '#########################################################' )
         print()
 
@@ -64,9 +77,9 @@ class mash_rpmd( map_rpmd.map_rpmd ):
         self.file_output = open( 'output.dat', 'w' )
         self.file_nucR   = open( 'nucR.dat','w' )
         self.file_nucP   = open( 'nucP.dat', 'w' )
-        self.file_mapSx   = open( 'mapSx.dat','w' )
-        self.file_mapSy   = open( 'mapSy.dat','w' )
-        self.file_mapSz   = open( 'mapSz.dat','w' )
+        self.file_mapSx  = open( 'mapSx.dat','w' )
+        self.file_mapSy  = open( 'mapSy.dat','w' )
+        self.file_mapSz  = open( 'mapSz.dat','w' )
         #self.file_mapR   = open( 'mapR.dat','w' )
         #self.file_mapP   = open( 'mapP.dat', 'w' )
         #self.file_Q      = open( 'Q.dat', 'w')
@@ -80,6 +93,7 @@ class mash_rpmd( map_rpmd.map_rpmd ):
             #Print data starting with initial time
             if( np.mod( step, Nprint ) == 0 ):
                 print('Writing data at step', step, 'and time', format(current_time, '.'+str(tDigits)+'f'), 'for', self.methodname, 'Dynamics calculation')
+                print('sum of mapS squares:', self.mapSx**2+self.mapSy**2+self.mapSz**2)
                 self.print_data( current_time )
                 sys.stdout.flush()
 
@@ -217,10 +231,24 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
     def get_timederiv_mapSx( self ):
 
-        Vz = self.potential.get_bopes(self.nucR)[:,1]
-        NAC = self.potential.calc_NAC(self.nucR)
+        if self.centroid_bool==False:
 
-        d_mapSx = 2 * np.sum( NAC * self.nucP / self.mass, axis = 1 ) * self.mapSz - 2 * Vz * self.mapSy #axis = 1 corresponds to the dimension of nuclear DOFs
+            Vz = self.potential.get_bopes(self.nucR)[:,1]
+            NAC = self.potential.calc_NAC(self.nucR)
+
+            d_mapSx = 2 * np.sum( NAC * self.nucP / self.mass, axis = 1 ) * self.mapSz - 2 * Vz * self.mapSy #axis = 1 corresponds to the dimension of nuclear DOFs
+        
+        else:
+
+            R_bar = np.mean(self.nucR, axis = 0)
+            Rbar_arr = np.tile(R_bar, (self.nbds, 1))
+            Vz = self.potential.get_bopes(Rbar_arr)[:,1]
+            NAC = self.potential.calc_NAC(Rbar_arr)
+
+            velo_bar = np.mean(self.nucP/self.mass, axis = 0)
+            vbar_arr = np.tile(velo_bar, (self.nbds, 1))
+
+            d_mapSx = 2 * np.sum(NAC * vbar_arr, axis = 1) * self.mapSz - 2 * Vz * self.mapSy
 
         return d_mapSx
 
@@ -228,26 +256,27 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
     def get_timederiv_mapSyz(self):
 
-        Vz = self.potential.get_bopes(self.nucR)[:,1]
-        NAC = self.potential.calc_NAC(self.nucR)
+        if self.centroid_bool==False:
 
-        d_mapSy = 2 * Vz * self.mapSx
-        d_mapSz = -2 * np.sum( NAC * self.nucP / self.mass, axis = 1 ) * self.mapSx
+            Vz = self.potential.get_bopes(self.nucR)[:,1]
+            NAC = self.potential.calc_NAC(self.nucR)
+
+            d_mapSy = 2 * Vz * self.mapSx
+            d_mapSz = -2 * np.sum( NAC * self.nucP / self.mass, axis = 1 ) * self.mapSx
+
+        else:
+            R_bar = np.mean(self.nucR, axis = 0)
+            Rbar_arr = np.tile(R_bar, (self.nbds, 1))
+            Vz = self.potential.get_bopes(Rbar_arr)[:,1]
+            NAC = self.potential.calc_NAC(Rbar_arr)
+
+            velo_bar = np.mean(self.nucP/self.mass, axis = 0)
+            vbar_arr = np.tile(velo_bar, (self.nbds, 1))
+
+            d_mapSy = 2 * Vz * self.mapSx
+            d_mapSz = -2 * np.sum(NAC * vbar_arr, axis = 1) * self.mapSx
 
         return d_mapSy, d_mapSz
-
-    #####################################################################
-    
-    def get_2nd_timederiv_mapSx( self, d_mapSy, d_mapSz):
-
-        Vz = self.potential.get_bopes(self.nucR)[:,1]
-        NAC = self.potential.calc_NAC(self.nucR)
-
-        #print(np.sum(NAC * self.nucP / self.mass, axis = 1))
-
-        d2_mapSx = 2 * np.sum(NAC * self.nucP / self.mass, axis = 1) * d_mapSz - 2 * Vz * d_mapSy
-
-        return d2_mapSx
 
    #####################################################################
 
@@ -282,20 +311,17 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
     #####################################################################
 
-    def init_spin_variables(self):
-        pass
-
     def spin_map_error_check(self):
 
-        if( self.mapSx is not None and self.mapSx.shape != (self.nbds,) ):
+        if( self.mapSx is not None and self.mapSx.shape != ( self.nbds, ) ):
             print('ERROR: Size of spin mapping variable Sx doesnt match bead number')
             exit()
 
-        if( self.mapSy is not None and self.mapSy.shape != (self.nbds,) ):
+        if( self.mapSy is not None and self.mapSy.shape != ( self.nbds, ) ):
             print('ERROR: Size of spin mapping variable Sy doesnt match bead number')
             exit()
 
-        if( self.mapSz is not None and self.mapSz.shape != (self.nbds,) ):
+        if( self.mapSz is not None and self.mapSz.shape != ( self.nbds, ) ):
             print('ERROR: Size of spin mapping variable Sz doesnt match bead number')
             exit()
 
@@ -314,17 +340,32 @@ class mash_rpmd( map_rpmd.map_rpmd ):
         print( '#########################################################' )
         print()
 
-        cos_theta = self.rng.uniform( -1, 1, size = self.nbds )
-        if init_state == 0:
-            cos_theta = self.rng.uniform( -1, 0, size = self.nbds )
-        if init_state == 1:
-            cos_theta = self.rng.uniform( 0, 1, size = self.nbds )
-        sin_theta = np.sqrt( 1 - cos_theta**2 )
-        phi = self.rng.uniform( 0, 2*np.pi, size = self.nbds )
+        if self.centroid_bool==False:
+            cos_theta = self.rng.uniform( -1, 1, size = self.nbds )
+            if init_state == 0:
+                cos_theta = self.rng.uniform( -1, 0, size = self.nbds )
+            if init_state == 1:
+                cos_theta = self.rng.uniform( 0, 1, size = self.nbds )
+            sin_theta = np.sqrt( 1 - cos_theta**2 )
+            phi = self.rng.uniform( 0, 2*np.pi, size = self.nbds )
         
-        self.mapSx = sin_theta * np.cos(phi)
-        self.mapSy = sin_theta * np.sin(phi)
-        self.mapSz = cos_theta
+            self.mapSx = sin_theta * np.cos(phi)
+            self.mapSy = sin_theta * np.sin(phi)
+            self.mapSz = cos_theta
+        
+        else:
+            # mapping variables are the same across all beads
+            cos_theta = self.rng.uniform( -1, 1 )
+            if init_state == 0:
+                cos_theta = self.rng.uniform( -1, 0 )
+            if init_state == 1:
+                cos_theta = self.rng.uniform( 0, 1 )
+            sin_theta = np.sqrt( 1 - cos_theta**2 )
+            phi = self.rng.uniform( 0, 2*np.pi )
+
+            self.mapSx = sin_theta * np.cos(phi) * np.ones(self.nbds)
+            self.mapSy = sin_theta * np.sin(phi) * np.ones(self.nbds)
+            self.mapSz = cos_theta * np.ones(self.nbds)
 
     #####################################################################
 

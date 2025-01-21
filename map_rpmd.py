@@ -769,7 +769,6 @@ class map_rpmd(ABC):
                 self.mapR[:,i] = r * np.cos(angle - np.pi/2)
                 self.mapP[:,i] = r * np.sin(angle - np.pi/2)
             
-
     #####################################################################
 
     def print_PIMD_data( self, current_time ):
