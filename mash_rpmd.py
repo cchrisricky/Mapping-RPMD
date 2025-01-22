@@ -93,7 +93,6 @@ class mash_rpmd( map_rpmd.map_rpmd ):
             #Print data starting with initial time
             if( np.mod( step, Nprint ) == 0 ):
                 print('Writing data at step', step, 'and time', format(current_time, '.'+str(tDigits)+'f'), 'for', self.methodname, 'Dynamics calculation')
-                print('sum of mapS squares:', self.mapSx**2+self.mapSy**2+self.mapSz**2)
                 self.print_data( current_time )
                 sys.stdout.flush()
 

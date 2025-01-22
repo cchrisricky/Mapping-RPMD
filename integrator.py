@@ -324,27 +324,26 @@ class integrator():
         map_rpmd.mapSy += 0.25 * d_mapSy * small_dt
         map_rpmd.mapSz += 0.25 * d_mapSz * small_dt
 
-        if ( map_rpmd.centroid_bool==False):
-
-            if ( np.array_equal( np.sign(mapSz_0), np.sign(map_rpmd.mapSz)) == False ):
-                
+        if ( np.array_equal( np.sign(mapSz_0), np.sign(map_rpmd.mapSz)) == False ):
+            if ( map_rpmd.centroid_bool==False):
                 #if there is a bead with different sign of Sz before and after the step
                 Vz = map_rpmd.potential.get_bopes(map_rpmd.nucR)[:, 1]
                 NAC = map_rpmd.potential.calc_NAC(map_rpmd.nucR)
 
                 for i in range(map_rpmd.nbds):
                     if (np.sign(mapSz_0[i])!=np.sign(map_rpmd.mapSz[i])):
+                        #Perform the hop on this bead
                         unit_NAC = NAC[i] / np.sqrt(np.sum( NAC[i]**2 ))
 
                         nucP_NAC = np.sum(map_rpmd.nucP[i] * unit_NAC) # the nuclear momentum norm along the NAC direction
                         KE_eff = nucP_NAC**2 * np.sum(unit_NAC**2 / map_rpmd.mass) / 2 # the effective kinetic energy along the NAC direction
 
-                        if ( mapSz_0[i] > 0 or KE_eff > Vz[i] ):
+                        if ( mapSz_0[i] > 0 or KE_eff > 2 * Vz[i] ):
                             # The hopping happens: transferring to a lower state or the kenitic energy is sufficient
                             # reach the point of a potential surface hopping. The momentum rescaling is about to be performed
                             # KE_eff += 2 * Vz * np.sign( Sz,init )
 
-                            nucP2_NAC_new = nucP_NAC**2 + 2*Vz[i]*np.sign(mapSz_0[i]) * ( unit_NAC**2 / np.sum(unit_NAC**2 / map_rpmd.mass / 2) )
+                            nucP2_NAC_new = nucP_NAC**2 + 2*Vz[i]*np.sign(mapSz_0[i]) / np.sum(unit_NAC**2 / map_rpmd.mass / 2) 
                             nucP_NAC_new = np.sign(nucP_NAC) * np.sqrt(nucP2_NAC_new)
                             map_rpmd.nucP[i] += (nucP_NAC_new - nucP_NAC) * unit_NAC
 
@@ -354,11 +353,8 @@ class integrator():
                             map_rpmd.nucP[i] -= 2*nucP_NAC * unit_NAC
                             map_rpmd.mapSz[i] *= -1
         
-        else:
-
-            if ( np.array_equal( np.sign(mapSz_0), np.sign(map_rpmd.mapSz)) == False ):
-
-                #if there is a bead with different sign of Sz before and after the step
+            else:
+                #The centroid approximation. Making all d_nucP dependent on the centroid.
                 R_bar = np.mean(map_rpmd.nucR, axis = 0)
                 Rbar_arr = np.tile(R_bar, (map_rpmd.nbds, 1))
                 Vz = map_rpmd.potential.get_bopes(Rbar_arr)[0, 1]
@@ -371,12 +367,12 @@ class integrator():
                 nucP_NAC = np.sum(P_bar * unit_NAC) # the nuclear momentum norm along the NAC direction
                 KE_eff = nucP_NAC**2 * np.sum(unit_NAC**2 / map_rpmd.mass) / 2 # the effective kinetic energy along the NAC direction
 
-                if ( mapSz_0[0] > 0 or KE_eff > Vz ):
+                if ( mapSz_0[0] > 0 or KE_eff > 2 * Vz ):
                     # The hopping happens: transferring to a lower state or the kenitic energy is sufficient
                     # reach the point of a potential surface hopping. The momentum rescaling is about to be performed
                     # KE_eff += 2 * Vz * np.sign( Sz,init )
 
-                    nucP2_NAC_new = nucP_NAC**2 + 2*Vz*np.sign(mapSz_0[0]) * ( unit_NAC**2 / np.sum(unit_NAC**2 / map_rpmd.mass / 2) )
+                    nucP2_NAC_new = nucP_NAC**2 + 2*Vz*np.sign(mapSz_0[0]) / np.sum(unit_NAC**2 / map_rpmd.mass / 2)
                     nucP_NAC_new = np.sign(nucP_NAC) * np.sqrt(nucP2_NAC_new)
                     map_rpmd.nucP += (nucP_NAC_new - nucP_NAC) * unit_NAC[np.newaxis,:]
 
