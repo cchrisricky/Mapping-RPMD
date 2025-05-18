@@ -325,14 +325,43 @@ class integrator():
         map_rpmd.mapSz += 0.25 * d_mapSz * small_dt
 
         if ( np.array_equal( np.sign(mapSz_0), np.sign(map_rpmd.mapSz)) == False ):
+            #if there is a different sign of Sz before and after the step
             if ( map_rpmd.centroid_bool==False):
-                #if there is a bead with different sign of Sz before and after the step
+                #if the centroid approximation is not applied, rescale the whole phase space made of ring polymers
                 Vz = map_rpmd.potential.get_bopes(map_rpmd.nucR)[:, 1]
                 NAC = map_rpmd.potential.calc_NAC(map_rpmd.nucR)
 
-                for i in range(map_rpmd.nbds):
+            else:
+                #if the centroid approximation is applied, all beads are non-adiabatically coupled with the same NAC vectors
+                #which are determined by the centroid of ring polymers
+                R_bar = np.mean(map_rpmd.nucR, axis = 0)
+                Rbar_arr = np.tile(R_bar, (map_rpmd.nbds, 1))
+                Vz = map_rpmd.potential.get_bopes(Rbar_arr)[:, 1]
+                NAC = map_rpmd.potential.calc_NAC(Rbar_arr)
+
+            unit_NAC = NAC / np.sqrt(np.sum( NAC**2 ))
+
+            nucP_NAC = np.sum(map_rpmd.nucP * unit_NAC) # the nuclear momentum norm along the NAC direction
+            KE_eff = nucP_NAC**2 * np.sum(unit_NAC**2 / map_rpmd.mass[np.newaxis,:]) / 2 # the effective kinetic energy along the NAC direction
+
+            if ( mapSz_0[0] > 0 or KE_eff > 2 * np.sum(Vz) ):
+                # The hopping happens: transferring to a lower state or the kenitic energy is sufficient
+                # reach the point of a potential surface hopping. The momentum rescaling is about to be performed
+                # KE_eff += 2 * Vz * np.sign( Sz,init )
+
+                nucP2_NAC_new = nucP_NAC**2 + 2*np.sum(Vz*np.sign(mapSz_0)) / np.sum(unit_NAC**2 / map_rpmd.mass[np.newaxis,:] / 2) 
+                nucP_NAC_new = np.sign(nucP_NAC) * np.sqrt(nucP2_NAC_new)
+                map_rpmd.nucP += (nucP_NAC_new - nucP_NAC) * unit_NAC
+
+            else:
+                # The hopping is frustrated, momenta will be bounced back on the direction of NAC
+                # Sz will be inverse
+                map_rpmd.nucP -= 2*nucP_NAC * unit_NAC
+                map_rpmd.mapSz *= -1
+
+                '''for i in range(map_rpmd.nbds):
                     if (np.sign(mapSz_0[i])!=np.sign(map_rpmd.mapSz[i])):
-                        #Perform the hop on this bead
+
                         unit_NAC = NAC[i] / np.sqrt(np.sum( NAC[i]**2 ))
 
                         nucP_NAC = np.sum(map_rpmd.nucP[i] * unit_NAC) # the nuclear momentum norm along the NAC direction
@@ -354,7 +383,7 @@ class integrator():
                             map_rpmd.mapSz[i] *= -1
         
             else:
-                #The centroid approximation. Making all d_nucP dependent on the centroid.
+                #if there is a different sign of Sz before and after the step
                 R_bar = np.mean(map_rpmd.nucR, axis = 0)
                 Rbar_arr = np.tile(R_bar, (map_rpmd.nbds, 1))
                 Vz = map_rpmd.potential.get_bopes(Rbar_arr)[0, 1]
@@ -380,7 +409,7 @@ class integrator():
                     # The hopping is frustrated, momenta will be bounced back on the direction of NAC
                     # Sz will be inverse
                     map_rpmd.nucP -= 2*nucP_NAC * unit_NAC[np.newaxis,:]
-                    map_rpmd.mapSz *= -1
+                    map_rpmd.mapSz *= -1'''
 
     ###############################################################
 

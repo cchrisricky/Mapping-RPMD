@@ -6,16 +6,41 @@ import mash_rpmd
 import utils
 import linecache
 
-nbds = 2
+rng = np.random.default_rng()
 
-mash_ = mash_rpmd.mash_rpmd(nstates=2, nnuc=1, nbds=nbds, beta=16, mass=np.array([2000]), potype='tully_2ac', 
-                            potparams=[np.array([0.1]), np.array([0.28]), np.array([0.015]), np.array([0.06]), np.array([0.05])], 
-                            nucR=np.array([[-2.0],[-1.8]]), nucP=np.array([[15.0],[18.0]]),
-                            mapSx=np.array([-3.45072805e-01, -3.45072805e-01]), mapSy=np.array([8.98779576e-01, 8.98779576e-01]), mapSz=np.array([-0.2704, -0.2704]),
-                            spinmap_bool=True, centroid_bool=True)
+nbds = 4
+nnuc = 1
+nstates = 2
+mass=np.array([2000])
 
-mash_.potential.calc_Hel(mash_.nucR)
-mash_.potential.calc_Hel_deriv(mash_.nucR)
+intype = 'vv'
+Ntraj = 25
+delt   = 0.1
+Nsteps = int(100 * 42 / delt) #about 1fs=41.34au
+Nprint = int(10/delt)
+
+fmt_str = '%20.8e'
+
+nucR_init = -10.0
+nucP_init = 10.0
+ga = 0.25
+nucR = rng.normal(nucR_init, np.sqrt( 1/ (ga*2) ), (nbds,nnuc))
+#nucP = rng.normal(nucP_init, np.sqrt( ga/2 ), (nbds,nnuc))
+nucP = nucP_init * np.ones((nbds,nnuc))
+
+mash_ = mash_rpmd.mash_rpmd(nstates=nstates, nnuc=nnuc, nbds=nbds, beta=2*mass[0]/nucP_init**2, mass=mass, potype='tully_1ac', 
+                            potparams=[np.array([0.01]), np.array([1.6]), np.array([0.005]), np.array([1.0])], 
+                            nucR=nucR, nucP=nucP, spinmap_bool=True, centroid_bool=True)
+
+# Initial electronic state variables using spin angle variables
+mash_.init_map_spin(0)
+
+#Run trajectory
+mash_.run_dynamics(Nsteps, Nprint, delt, intype, init_time=0.0, small_dt_ratio=1)
+
+
+#mash_.potential.calc_Hel(mash_.nucR)
+#mash_.potential.calc_Hel_deriv(mash_.nucR)
 
 #mash_.init_map_spin(0) #initialize electrons state to state 0
 
@@ -25,7 +50,7 @@ mash_.potential.calc_Hel_deriv(mash_.nucR)
 #print(mash_.get_2nd_timederiv_mapSx(dSy, dSz))
 #print(mash_.potential.calc_NAC())
 
-mash_.run_dynamics(Nsteps=4000, Nprint=100, delt=0.01, intype="vv", init_time=0.0, small_dt_ratio=1)
+#mash_.run_dynamics(Nsteps=4000, Nprint=100, delt=0.01, intype="vv", init_time=0.0, small_dt_ratio=1)
 #print(mash_.potential.Hel)
 #print(mash_.potential.d_Hel)
 

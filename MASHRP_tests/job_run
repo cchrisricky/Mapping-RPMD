@@ -1,0 +1,21 @@
+#!/bin/bash -l
+  
+#SBATCH -A gts-jkretchmer3-chemx
+#SBATCH -q inferno
+#SBATCH -N 1 --ntasks-per-node=1
+#SBATCH -t 8:00:00
+#SBATCH -J name
+#SBATCH -e SBATCH_error_file.err
+#SBATCH -o SBATCH_output_file.out
+#SBATCH --mail-type=FAIL
+#SBATCH --mail-user=zcao91@gatech.edu
+#SBATCH -V
+
+
+cd $SLURM_SUBMIT_DIR
+
+module load anaconda3
+
+conda activate my_env
+
+python run_dynamics.py > ziying.out
