@@ -185,15 +185,17 @@ class mash_rpmd( map_rpmd.map_rpmd ):
         
         else:
             #The MASH nuclear force, note that Hel here are adiabatic surfaces
-            d_Vz = self.potential.get_bopes_derivs(self.nucR)[:,:,1]
+            dE_bo = self.potential.get_bopes_derivs(self.nucR)
+            d_Vz = (dE_bo[:,:,1] - dE_bo[:,:,0])/2
             #Calculate delta function force as functional limit or with adaptive timestep
             if (self.functional_param != None):
-                Vz = self.potential.get_bopes(self.nucR)[:,1]
+                E_bo = self.potential.get_bopes(self.nucR)
+                Vz = (E_bo[:,1] - E_bo[:,0])/2
                 NAC = self.potential.calc_NAC(self.nucR)
                 d_nucP += -d_Vz * erf(self.mapSz[:,np.newaxis] / self.functional_param) + 4 * Vz[:,np.newaxis] * NAC * self.mapSx[:,np.newaxis] * np.exp(-(self.mapSz[:,np.newaxis] / self.functional_param)**2) / (self.functional_param * np.sqrt(np.pi))
                 #d_nucP += -d_Vz * np.sign(self.mapSz[:,np.newaxis])
             else:
-                d_nucP += -d_Vz * np.sign(self.mapSz[:,np.newaxis])
+                d_nucP += -d_Vz * np.sign(self.mapSz[:,np.newaxis]) - (dE_bo[:,:,1] + dE_bo[:,:,0])/2
 
         return d_nucP
 
@@ -231,7 +233,8 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
         if (self.centroid_bool==False and self.bead_bool==False):
 
-            Vz = self.potential.get_bopes(self.nucR)[:,1]
+            E_bo = self.potential.get_bopes(self.nucR)
+            Vz = (E_bo[:,1] - E_bo[:,0])/2
             NAC = self.potential.calc_NAC(self.nucR)
 
             d_mapSx = 2 * np.sum( NAC * self.nucP / self.mass, axis = 1 ) * self.mapSz - 2 * Vz * self.mapSy #axis = 1 corresponds to the dimension of nuclear DOFs
@@ -240,7 +243,8 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
             R_bar = np.mean(self.nucR, axis = 0)
             Rbar_arr = np.tile(R_bar, (self.nbds, 1))
-            Vz = self.potential.get_bopes(Rbar_arr)[:,1]
+            E_bo = self.potential.get_bopes(Rbar_arr)
+            Vz = (E_bo[:,1] - E_bo[:,0])/2
             NAC = self.potential.calc_NAC(Rbar_arr)
 
             velo_bar = np.mean(self.nucP/self.mass, axis = 0)
@@ -249,7 +253,8 @@ class mash_rpmd( map_rpmd.map_rpmd ):
             d_mapSx = 2 * np.sum(NAC * vbar_arr, axis = 1) * self.mapSz - 2 * Vz * self.mapSy
 
         elif self.bead_bool==True:
-            Vz = self.potential.get_bopes(self.nucR)[:,1]
+            E_bo = self.potential.get_bopes(self.nucR)
+            Vz = (E_bo[:,1] - E_bo[:,0])/2
             NAC = self.potential.calc_NAC(self.nucR)
 
             d_mapSx = np.mean(2 * np.sum( NAC * self.nucP / self.mass, axis = 1 ) * self.mapSz - 2 * Vz * self.mapSy) * np.ones(self.nbds)
@@ -262,7 +267,8 @@ class mash_rpmd( map_rpmd.map_rpmd ):
 
         if (self.centroid_bool==False and self.bead_bool==False ):
 
-            Vz = self.potential.get_bopes(self.nucR)[:,1]
+            E_bo = self.potential.get_bopes(self.nucR)
+            Vz = (E_bo[:,1] - E_bo[:,0])/2
             NAC = self.potential.calc_NAC(self.nucR)
 
             d_mapSy = 2 * Vz * self.mapSx
@@ -271,7 +277,8 @@ class mash_rpmd( map_rpmd.map_rpmd ):
         elif(self.centroid_bool==True):
             R_bar = np.mean(self.nucR, axis = 0)
             Rbar_arr = np.tile(R_bar, (self.nbds, 1))
-            Vz = self.potential.get_bopes(Rbar_arr)[:,1]
+            E_bo = self.potential.get_bopes(Rbar_arr)
+            Vz = (E_bo[:,1] - E_bo[:,0])/2
             NAC = self.potential.calc_NAC(Rbar_arr)
 
             velo_bar = np.mean(self.nucP/self.mass, axis = 0)
@@ -281,7 +288,8 @@ class mash_rpmd( map_rpmd.map_rpmd ):
             d_mapSz = -2 * np.sum(NAC * vbar_arr, axis = 1) * self.mapSx
 
         elif(self.bead_bool==True):
-            Vz = self.potential.get_bopes(self.nucR)[:,1]
+            E_bo = self.potential.get_bopes(self.nucR)
+            Vz = (E_bo[:,1] - E_bo[:,0])/2
             NAC = self.potential.calc_NAC(self.nucR)
 
             d_mapSy = np.mean(2 * Vz * self.mapSx) * np.ones(self.nbds)
@@ -315,8 +323,8 @@ class mash_rpmd( map_rpmd.map_rpmd ):
                 engpe += -0.5 * np.sum( np.einsum( 'inn -> i', self.potential.Hel ) )
 
         else:
-            Vz = self.potential.get_bopes(self.nucR)[:,1]
-            engpe += np.sum(Vz * np.sign(self.mapSz))
+            E_bo = self.potential.get_bopes(self.nucR)
+            engpe += np.sum((E_bo[:,1]-E_bo[:,0])/2 * np.sign(self.mapSz) + (E_bo[:,1]+E_bo[:,0])/2)
             
         return engpe
 

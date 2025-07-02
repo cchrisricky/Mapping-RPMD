@@ -12,8 +12,8 @@ def set_potential( potype, potparams, nstates, nnuc, nbds ):
 
     #Separate routine which returns the appropriate potential class indicated by potype
 
-    potype_list = ['harm_const_cpl', 'harm_lin_cpl', 'harm_lin_cpl_symmetrized', 'harm_lin_cpl_sym_2', 'tully_1ac', 'tully_2ac', 'nstate_morse', 
-                   'nuc_only_harm', 'pengfei_polariton', 'isolated_elec']
+    potype_list = ['harm_const_cpl', 'harm_lin_cpl', 'harm_lin_cpl_symmetrized', 'harm_lin_cpl_sym_2', 'tully_1ac', 'tully_2ac', 'tully_EC',
+                    'nstate_morse', 'nuc_only_harm', 'pengfei_polariton', 'isolated_elec']
 
     if( potype not in potype_list ):
         print("ERROR: potype not one of valid types:")
@@ -106,8 +106,9 @@ class potential(ABC):
     ###############################################################
 
     def calc_NAC(self, nucR):
-        H_bo = self.get_bopes(nucR)
-        d_H_bo = self.get_bopes_derivs(nucR)
+        self.calc_Hel( nucR )
+        self.calc_Hel_deriv( nucR )
+        
         Hel = self.Hel
         d_Hel = self.d_Hel
         
@@ -115,9 +116,10 @@ class potential(ABC):
         NAC = np.zeros([self.nbds, self.nnuc])
 
         for i in range(self.nbds):
-            V0 = Hel[i,0,0]
+            #symmetrize the Hel
+            V0 = (Hel[i,0,0] - Hel[i,1,1]) / 2
             D = Hel[i,0,1]
-            d_V0 = d_Hel[i,:,0,0]
+            d_V0 = (d_Hel[i,:,0,0] - d_Hel[i,:,1,1]) / 2
             d_D = d_Hel[i,:,0,1]
 
             NAC[i] = ( D * d_V0 - V0 * d_D) / ( D**2 + V0**2 ) / 2
@@ -127,26 +129,25 @@ class potential(ABC):
     ###############################################################
 
     def get_bopes(self, nucR):
+
+        # Calculate the BO PES's by directly diagonalizing the 2-state diabatic Hel
+        # NOT need to Make sure that Hel has a symmetric formation, i.e., Hel[0,0] = -Hel[1,1]
+
         self.calc_Hel( nucR )
         Hel = self.Hel
  
-        #Calculate the BO PES's by directly diagonalizing the 2-state diabatic Hel
-        #Making sure that Hel has a symmetric formation, i.e., Hel[0,0] = -Hel[1,1]
-        #XXX
-
         H_bo = np.zeros((self.nbds, self.nstates))
 
-        for i in range(self.nbds):
-            H_diab = Hel[i]
-            if ( H_diab.shape != (2,2) ):
-                print('ERROR: the diabatic Hel does not have a size of 2*2')
-                exit()
-            if ( np.abs(H_diab[0,0]+H_diab[1,1])>1e-5 or np.abs(H_diab[0,1]-H_diab[1,0])>1e-5 ):
-                print('ERROR: the diabatic Hel is not symmetric at bead', i)
-                exit()
+        if ( Hel.shape != (self.nbds,2,2) ):
+            print('ERROR: the diabatic Hel does not have a size of nbds*2*2')
+            exit()
 
-            H_bo[i,1] = np.sqrt( H_diab[0,0]**2 + np.absolute(H_diab[0,1])**2 )
-            H_bo[i,0] = -H_bo[i,1]
+        H_bar = (Hel[:,1,1] + Hel[:,0,0])/2
+        H_dif = Hel[:,1,1] - Hel[:,0,0]
+        Delta = Hel[:,0,1]
+
+        H_bo[:,0] = H_bar - np.sqrt( H_dif**2 / 4 + np.abs(Delta)**2 )
+        H_bo[:,1] = H_bar + np.sqrt( H_dif**2 / 4 + np.abs(Delta)**2 )
 
         return H_bo
 
@@ -166,13 +167,10 @@ class potential(ABC):
             if (H_diab.shape != (2,2)):
                 print('ERROR: the diabatic Hel does not have a size of 2*2 when BO surfaces are calculated')
                 exit()
-            if (np.abs(H_diab[0,0]+H_diab[1,1])>1e-5):
-                print('ERROR: the diabatic Hel is not symmetric when BO surfaces are calculated at bead', i)
-                exit()
 
             #d_H_bo[i,:,0] = -(H_diab[0,0]*dH_diab[:,0,0] + H_diab[0,1]*dH_diab[:,0,1])/np.sqrt(H_diab[0,0]**2 + H_diab[0,1]**2)
-            d_H_bo[i,:,1] = ( H_diab[0,0] * dH_diab[:,0,0] + H_diab[0,1] * dH_diab[:,0,1] ) / np.sqrt( H_diab[0,0]**2 + np.absolute(H_diab[0,1])**2 )
-            d_H_bo[i,:,0] = -d_H_bo[i,:,1]
+            d_H_bo[i,:,1] = (dH_diab[:,0,0]+dH_diab[:,1,1]) / 2 + ( (H_diab[0,0]-H_diab[1,1]) * (dH_diab[:,0,0]-dH_diab[:,1,1]) / 4 + H_diab[0,1] * dH_diab[:,0,1] ) / np.sqrt( (H_diab[0,0]-H_diab[1,1])**2 / 4 + H_diab[0,1]**2 )
+            d_H_bo[i,:,0] = (dH_diab[:,0,0]+dH_diab[:,1,1]) / 2 - ( (H_diab[0,0]-H_diab[1,1]) * (dH_diab[:,0,0]-dH_diab[:,1,1]) / 4 + H_diab[0,1] * dH_diab[:,0,1] ) / np.sqrt( (H_diab[0,0]-H_diab[1,1])**2 / 4 + H_diab[0,1]**2 )
 
         return d_H_bo
 
@@ -226,7 +224,6 @@ class BO_PES(ABC):
         self.NAC   = np.zeros( [ nbds, nnuc ] )
 
     #####################################################################
-
 
 ####### DEFINED POTENTIALS AS INSTANCES OF PARENT POTENTIAL CLASS #######
 
@@ -598,7 +595,10 @@ class harm_lin_cpl_symmetrized(potential):
             d_Hel[i] -= np.mean(np.diag(self.amat[i])) * np.eye(self.nstates)
 
         #multi-bead d_Hel
-        self.d_Hel = d_Hel[np.newaxis,:,:,:]
+        for i in range(self.nbds):
+            self.d_Hel[i] = d_Hel
+
+        #self.d_Hel = d_Hel[np.newaxis,:,:,:]
 
     ###############################################################
 
@@ -1059,7 +1059,7 @@ class tully_1ac(potential):
 
 class tully_2ac(potential):
 
-    #Class for Tully's dual avoided crossing(1ac) model.
+    #Class for Tully's dual avoided crossing(2ac) model.
     #All Tully models only contain 1 nulcear DOF
     #See Mannouch, Richardson, JCP 2023
 
@@ -1145,4 +1145,87 @@ class tully_2ac(potential):
         if( self.d.shape != (self.nnuc,) ):
             print("ERROR: 5th entry of list potparams should be nnuc-dimensional and it corresponds to the vertical energy shifts for both states")
             exit()
+    ###############################################################
+
+class tully_EC(potential):
+
+    #Class for Tully's extended coupling model.
+    #All Tully models only contain 1 nulcear DOF
+    #See Mannouch, Richardson, JCP 2023
+
+    def __init__( self, potparams, nstates, nnuc, nbds ):
+
+        super().__init__( 'extended coupling Tully', potparams, nstates, nnuc, nbds )
+
+        self.a = potparams[0]
+        self.b = potparams[1]
+        self.c = potparams[2]
+
+        #Input error check
+        self.error_check()
+
+    def calc_Hel( self, nucR ):
+        #Subroutine to calculate set of electronic Hamiltonian matrices for each bead
+        #nucR is the nuclear positions and is of dimension nbds x nnuc, where nnuc is only 1
+
+        self.Hel[:,0,0] = -self.a
+        self.Hel[:,1,1] = -self.Hel[:,0,0]
+
+        self.Hel[:,0,1] = self.Hel[:,1,0] = np.sum(self.b * (1 + np.sign(nucR) * ( 1 - np.exp( -self.c * np.abs(nucR) ) )), axis = 1)
+
+    def calc_Hel_deriv( self, nucR ):
+        #Subroutine to calculate set of nuclear derivative of electronic Hamiltonian matrices for each bead
+        #nucR is the nuclear positions and is of dimension nbds x nnuc
+
+        #linear coupling to nuclear modes leads to same derivative for all beads for each nuclei
+        self.d_Hel[:,:,0,0] = 0 * nucR
+        self.d_Hel[:,:,1,1] = - self.d_Hel[:,:,0,0]
+        
+        self.d_Hel[:,:,0,1] = self.d_Hel[:,:,1,0] = self.b*self.c * np.exp( -self.c * np.abs(nucR) )
+
+    ###############################################################
+
+    def calc_state_indep_eng( self, nucR ):
+        #Subroutine to calculate the energy associated with the state independent term
+
+        #harmonic term with different k for each nuclei
+        eng = 0
+
+        return eng
+
+    ###############################################################
+
+    def calc_state_indep_force( self, nucR ):
+        #Subroutine to calculate the force associated with the state independent term
+        #Note that this corresponds to the negative derivative
+
+        #force from harmonic term with different k for each nuclei
+        force = 0
+
+        return force
+
+    ###############################################################
+
+    def error_check( self ):
+
+        if( self.nnuc != 1):
+            print('ERROR: the number of the nuclear DOF is not 1')
+            exit()
+
+        if( self.nstates != 2):
+            print("ERROR: the number of electronic states is not 2")
+            exit()
+
+        if( self.a.shape != (self.nnuc,) ):
+            print("ERROR: 1st entry of list potparams should have the same dimension with the nnuc")
+            exit()
+
+        if( self.b.shape != (self.nnuc,) ):
+            print("ERROR: 2nd entry of list potparams should be nnuc-dimensional")
+            exit()
+
+        if( self.c.shape != (self.nnuc,) ):
+            print("ERROR: 3rd entry of list potparams should be nnuc-dimensional")
+            exit()
+
     ###############################################################

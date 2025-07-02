@@ -328,7 +328,8 @@ class integrator():
             #if there is a different sign of Sz before and after the step
             if ( map_rpmd.centroid_bool==False):
                 #if the centroid approximation is not applied, rescale the whole phase space made of ring polymers
-                Vz = map_rpmd.potential.get_bopes(map_rpmd.nucR)[:, 1]
+                H_bo = map_rpmd.potential.get_bopes(map_rpmd.nucR)
+                Vz = (H_bo[:,1]-H_bo[:,0])/2
                 NAC = map_rpmd.potential.calc_NAC(map_rpmd.nucR)
 
             else:
@@ -336,7 +337,8 @@ class integrator():
                 #which are determined by the centroid of ring polymers
                 R_bar = np.mean(map_rpmd.nucR, axis = 0)
                 Rbar_arr = np.tile(R_bar, (map_rpmd.nbds, 1))
-                Vz = map_rpmd.potential.get_bopes(Rbar_arr)[:, 1]
+                H_bo = map_rpmd.potential.get_bopes(Rbar_arr)
+                Vz = (H_bo[:,1]-H_bo[:,0])/2
                 NAC = map_rpmd.potential.calc_NAC(Rbar_arr)
 
             unit_NAC = NAC / np.sqrt(np.sum( NAC**2 ))
