@@ -13,7 +13,7 @@ def set_potential( potype, potparams, nstates, nnuc, nbds ):
     #Separate routine which returns the appropriate potential class indicated by potype
 
     potype_list = ['harm_const_cpl', 'harm_lin_cpl', 'harm_lin_cpl_symmetrized', 'harm_lin_cpl_sym_2', 'tully_1ac', 'tully_2ac', 'tully_EC',
-                    'nstate_morse', 'nuc_only_harm', 'pengfei_polariton', 'isolated_elec']
+                    'nstate_morse', 'nuc_only_harm', 'nuc_only_Marcus_withbath', 'pengfei_polariton', 'isolated_elec', 'ET_with_bath']
 
     if( potype not in potype_list ):
         print("ERROR: potype not one of valid types:")
@@ -206,25 +206,6 @@ class potential(ABC):
 
     ###############################################################
 
-class BO_PES(ABC):
-    #The class that directly has the numerical adiabatic PESs without calculating diabatic energies
-
-    @abstractmethod
-    def __init__( self, potname, potparams, nstates, nnuc, nbds ):
-
-        self.potname   = potname #string corresponding to the name of the potential
-        self.potparams = potparams #array defining the necessary constants for the potential
-        self.nstates   = nstates #number of electronic states
-        self.nnuc      = nnuc #number of nuclei
-        self.nbds      = nbds #number of beads
-
-        #Initialize set of electronic Hamiltonian matrices and they're nuclear derivatives
-        self.Hel   = np.zeros( [ nbds, nstates ] )
-        self.d_Hel = np.zeros( [ nbds, nnuc, nstates ] )
-        self.NAC   = np.zeros( [ nbds, nnuc ] )
-
-    #####################################################################
-
 ####### DEFINED POTENTIALS AS INSTANCES OF PARENT POTENTIAL CLASS #######
 
 class nstate_morse(potential):
@@ -352,6 +333,132 @@ class nstate_morse(potential):
             exit()
 
 #########################################################################
+
+class ET_with_bath(potential):
+
+    # Class for the Marcus electron-transfer model
+    # Bath is defined by the spectral density
+    # Bath could be classical (bead of 1) or quantum mechanical (beads of N)
+
+    ###############################################################
+
+    def __init__( self, potparams, nstates, nnuc, nbds):
+
+        super().__init__( 'Marcus ET with bath', potparams, nstates, nnuc, nbds )
+
+        #Set appropriate potential parameters
+        if( len(potparams) != 5 ):
+            super().error_wrong_param_numb(5)
+
+        self.kvec = potparams[0] # force constant of the Marcus parabolas, size 1
+        self.epsil = potparams[1] # driving force of the reaction, size 1
+        self.lbd = potparams[2] # lambda, Marcus reorganization energy, size 1
+        self.delta = potparams[3] # constant diabatic coupling, size 1
+        self.bathvec = potparams[4] #bath terms including all other vibronic modes, following Ohmic spectral density, has the form of [N_bath, mass, gamma (friction coefficient, gamma=Xi*pi/2, Xi: Kondo parameter), w_b (characteristic freq)]
+
+        #Input error check
+        self.error_check()
+
+        #the bath potential follows the Ohmic spectral density
+        if self.bathvec[0] != 0:
+            self.omega_k = - self.bathvec[3] * np.log( (np.arange(self.bathvec[0])+0.5) / self.bathvec[0] )
+            self.c_k     = np.sqrt( 2*self.bathvec[1]*self.bathvec[2]*self.bathvec[3] / np.pi / self.bathvec[0] ) * self.omega_k
+            self.k_bath_vec = self.omega_k**2 * self.bathvec[1]
+
+    ###############################################################
+
+    def calc_Hel( self, nucR ):
+        #Subroutine to calculate set of electronic Hamiltonian matrices for each bead
+        #Assumes first nuclei corresponds to reaction coordinate
+        #nucR is the nuclear positions and is of dimension nbds x nnuc
+
+        #Calculate the adiabatic electronic energy for each bead
+        #Eg = self.calc_diabatic_energy( nucR[:,0], 0)
+        #Ee = self.calc_diabatic_energy( nucR[:,0], 1)
+
+        rxnR = np.copy( nucR[:,0] )
+
+        self.Hel[:,0,0] = 0.5 * self.kvec * ( rxnR + np.sqrt(self.lbd/self.kvec/2) )**2 + self.epsil/2
+        self.Hel[:,1,1] = 0.5 * self.kvec * ( rxnR - np.sqrt(self.lbd/self.kvec/2) )**2 - self.epsil/2
+
+        self.Hel[:,0,1] = self.delta
+        self.Hel[:,1,0] = self.delta
+
+    ###############################################################
+
+    def calc_Hel_deriv( self, nucR ):
+
+        #Subroutine to calculate set of nuclear derivative of electronic Hamiltonian matrices for each bead
+        #nucR is the nuclear positions and is of dimension nbds x nnuc
+
+        self.d_Hel.fill(0.0)
+        rxnR = np.copy( nucR[:,0] )
+        d_Hel = np.zeros([self.nbds, self.nstates, self.nstates])
+
+        d_Hel[:,0,0] = self.kvec * ( rxnR + np.sqrt(self.lbd/self.kvec/2) ) 
+        d_Hel[:,1,1] = self.kvec * ( rxnR - np.sqrt(self.lbd/self.kvec/2) )
+
+        self.d_Hel[:,0,:,:] = d_Hel
+
+    ################################################################
+
+    def calc_state_indep_eng( self, nucR ):
+        #Subroutine to calculate the energy associated with the state independent term
+        #H_sb = T_r + \sum_k 1/2 w_k^2 * [r_k + c_k/w_k^2 * R]^2
+
+        eng = 0
+        if (self.nnuc == 1):
+            return eng #only reaction coordinate. No contribution from bath modes.
+        else:
+            for ibd in range(self.nbds):
+                for inuc in range(self.nnuc-1):
+                    eng += 0.5 * self.k_bath_vec[inuc] * ( nucR[ibd, inuc+1] + self.c_k[inuc] / self.k_bath_vec[inuc] * nucR[ibd,0] )**2
+
+        return eng
+
+    ################################################################
+
+    def calc_state_indep_force( self, nucR ):
+        #Subroutine to calculate the force associated with the state independent term
+        #Note that this corresponds to the negative derivative
+        #nucR is the coordinate matrix with a dimension of (nbds, nnuc)
+        
+        #force from harmonic term with different k for each nuclei
+        force = np.zeros([self.nbds, self.nnuc])
+        
+        if (self.nnuc == 1):
+            return force #only reaction coordinate.
+
+        else:
+            for ibd in range(self.nbds):
+                for inuc in range(self.nnuc-1):
+
+                    force[ibd, 0] -= self.c_k[inuc] * (self.c_k[inuc]/self.k_bath_vec[inuc] * nucR[ibd,0] + nucR[ibd,inuc+1])
+                    force[ibd, inuc+1] = - self.k_bath_vec[inuc] * nucR[ibd, inuc+1] - self.c_k[inuc] * nucR[ibd,0]
+
+        return force
+
+    ###############################################################
+
+    def error_check( self ):
+
+        if( self.nstates != 2 ):
+            print("ERROR: ET_with_bath only supports two electronic states")
+
+        if( not isinstance(self.kvec, float) ):
+            print("ERROR: 1st entry of list potparams should be the force constant of the PESs")
+            exit()
+
+        if( not isinstance(self.epsil, float) ):
+            print("ERROR: 2nd entry of list potparams should be the ET driving force")
+            exit()
+
+        if( self.nnuc != self.bathvec[0] + 1):
+            print("ERROR: bath mode number does not equal total nuclear modes -1")
+            exit()
+
+#########################################################################
+
 
 class harm_const_cpl(potential):
 
